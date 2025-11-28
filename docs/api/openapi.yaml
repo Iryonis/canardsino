@@ -1,0 +1,1832 @@
+openapi: 3.0.3
+info:
+  title: CoinCoin Casino API
+  description: |
+    API complète pour la plateforme de casino en ligne CoinCoin.
+    
+    ## Architecture
+    - **API Gateway** : Point d'entrée unique pour tous les services
+    - **Microservices** : Auth, Wallet, Game Engine, Chat, Stats, Notifier
+    - **Message Bus** : RabbitMQ pour la communication inter-services
+    - **Blockchain** : Polygon pour ETH/USDC et token CCC
+    
+    ## Flux de l'utilisateur
+    1. Register/Login → JWT Token
+    2. Dépôt crypto (ETH/USDC) → Conversion en CCC (1000 CCC = 1$)
+    3. Jouer à la roulette → Mise en CCC
+    4. Recevoir résultats en temps réel (SSE)
+    5. Voir dashboard avec stats
+    6. Retrait des gains en crypto
+    
+    ## Taux de conversion
+    - 1000 CCC = 1 USD (fixe)
+    - Prix ETH/USDC via CoinMarketCap API
+  version: 1.0.0
+  contact:
+    name: CoinCoin Casino Support
+    email: support@coincoincasino.com
+
+servers:
+  - url: https://api.coincoincasino.com/v1
+    description: Production API Gateway
+  - url: https://staging-api.coincoincasino.com/v1
+    description: Staging API Gateway
+  - url: http://localhost:8080/v1
+    description: Development API Gateway
+
+tags:
+  - name: Auth
+    description: Authentification et gestion des utilisateurs
+  - name: Profile
+    description: Gestion du profil utilisateur
+  - name: Wallet
+    description: Gestion du portefeuille crypto et CCC
+  - name: Game
+    description: Moteur de jeu (Roulette)
+  - name: Chat
+    description: Chat en temps réel (SSE)
+  - name: Stats
+    description: Statistiques et dashboard (SSE)
+  - name: Admin
+    description: Endpoints administrateurs
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ==================== AUTH SERVICE ====================
+  /auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Créer un nouveau compte utilisateur
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - username
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "player@example.com"
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 20
+                  pattern: '^[a-zA-Z0-9_-]+$'
+                  example: "Player123"
+                password:
+                  type: string
+                  minLength: 8
+                  format: password
+                  example: "SecurePass123!"
+                referralCode:
+                  type: string
+                  example: "REF123456"
+      responses:
+        '201':
+          description: Compte créé avec succès
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Account created successfully"
+                  data:
+                    type: object
+                    properties:
+                      userId:
+                        type: string
+                        format: uuid
+                        example: "550e8400-e29b-41d4-a716-446655440000"
+                      email:
+                        type: string
+                        example: "player@example.com"
+                      username:
+                        type: string
+                        example: "Player123"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Email ou username déjà utilisé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Se connecter à son compte
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - login
+                - password
+              properties:
+                login:
+                  type: string
+                  description: Email ou username
+                  example: "player@example.com"
+                password:
+                  type: string
+                  format: password
+                  example: "SecurePass123!"
+      responses:
+        '200':
+          description: Connexion réussie
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      accessToken:
+                        type: string
+                        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      refreshToken:
+                        type: string
+                        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      expiresIn:
+                        type: integer
+                        example: 3600
+                        description: Durée de validité en secondes
+                      user:
+                        $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Rafraîchir le token JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        '200':
+          description: Token rafraîchi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      accessToken:
+                        type: string
+                      expiresIn:
+                        type: integer
+                        example: 3600
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Se déconnecter
+      responses:
+        '200':
+          description: Déconnexion réussie
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Logged out successfully"
+
+  # ==================== PROFILE SERVICE ====================
+  /profile:
+    get:
+      tags:
+        - Profile
+      summary: Récupérer le profil de l'utilisateur connecté
+      responses:
+        '200':
+          description: Profil récupéré
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      tags:
+        - Profile
+      summary: Modifier son profil
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  example: "NewUsername"
+                email:
+                  type: string
+                  format: email
+                  example: "newemail@example.com"
+                avatar:
+                  type: string
+                  format: uri
+                  example: "https://cdn.coincoincasino.com/avatars/avatar1.png"
+                bio:
+                  type: string
+                  maxLength: 500
+                  example: "Roulette enthusiast!"
+      responses:
+        '200':
+          description: Profil mis à jour
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ==================== WALLET SERVICE ====================
+  /wallet/balance:
+    get:
+      tags:
+        - Wallet
+      summary: Récupérer le solde du wallet
+      responses:
+        '200':
+          description: Solde récupéré
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      balanceCCC:
+                        type: integer
+                        example: 50000
+                        description: Balance en CCC (1000 CCC = 1$)
+                      balanceUSD:
+                        type: number
+                        format: float
+                        example: 50.00
+                        description: Équivalent en USD
+                      lockedCCC:
+                        type: integer
+                        example: 5000
+                        description: CCC bloqués dans des paris en cours
+                      availableCCC:
+                        type: integer
+                        example: 45000
+                        description: CCC disponibles pour parier
+
+  /wallet/deposit/address:
+    get:
+      tags:
+        - Wallet
+      summary: Obtenir l'adresse de dépôt Polygon
+      responses:
+        '200':
+          description: Adresse de dépôt
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      address:
+                        type: string
+                        example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1"
+                        description: Adresse unique pour l'utilisateur
+                      network:
+                        type: string
+                        example: "Polygon"
+                      supportedTokens:
+                        type: array
+                        items:
+                          type: string
+                        example: ["ETH", "USDC"]
+                      minDeposit:
+                        type: object
+                        properties:
+                          ETH:
+                            type: string
+                            example: "0.001"
+                          USDC:
+                            type: string
+                            example: "2"
+
+  /wallet/deposit/history:
+    get:
+      tags:
+        - Wallet
+      summary: Historique des dépôts
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Historique des dépôts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      deposits:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Deposit'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  /wallet/withdraw/request:
+    post:
+      tags:
+        - Wallet
+      summary: Demander un retrait
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - amountCCC
+                - token
+                - address
+              properties:
+                amountCCC:
+                  type: integer
+                  minimum: 2000
+                  example: 50000
+                  description: Montant en CCC (min 2$ = 2000 CCC)
+                token:
+                  type: string
+                  enum: [ETH, USDC]
+                  example: "USDC"
+                address:
+                  type: string
+                  pattern: '^0x[a-fA-F0-9]{40}$'
+                  example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1"
+                  description: Adresse Polygon du destinataire
+      responses:
+        '201':
+          description: Demande de retrait créée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Withdrawal'
+        '400':
+          description: Solde insuffisant ou paramètres invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /wallet/withdraw/history:
+    get:
+      tags:
+        - Wallet
+      summary: Historique des retraits
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Historique des retraits
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      withdrawals:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Withdrawal'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  /wallet/transactions:
+    get:
+      tags:
+        - Wallet
+      summary: Historique de toutes les transactions
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [deposit, withdrawal, bet, win, loss, refund]
+      responses:
+        '200':
+          description: Historique des transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      transactions:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Transaction'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  # ==================== GAME ENGINE ====================
+  /games/roulette/config:
+    get:
+      tags:
+        - Game
+      summary: Configuration de la roulette
+      security: []
+      responses:
+        '200':
+          description: Configuration du jeu
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/RouletteConfig'
+
+  /games/roulette/bet:
+    post:
+      tags:
+        - Game
+      summary: Placer un pari sur la roulette
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BetRequest'
+      responses:
+        '201':
+          description: Pari placé avec succès
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      betId:
+                        type: string
+                        format: uuid
+                        example: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+                      gameId:
+                        type: string
+                        format: uuid
+                        example: "8d0f7780-8536-51ef-055c-f18gc2g01bf8"
+                      status:
+                        type: string
+                        enum: [pending, active]
+                        example: "active"
+                      bets:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PlacedBet'
+                      totalAmount:
+                        type: integer
+                        example: 5000
+                      newBalance:
+                        type: integer
+                        example: 45000
+        '400':
+          description: Pari invalide ou solde insuffisant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /games/roulette/validate:
+    post:
+      tags:
+        - Game
+      summary: Valider les paris et lancer la roulette
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - gameId
+              properties:
+                gameId:
+                  type: string
+                  format: uuid
+                  example: "8d0f7780-8536-51ef-055c-f18gc2g01bf8"
+      responses:
+        '200':
+          description: Roulette lancée, résultat en cours
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      gameId:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        example: "spinning"
+                      estimatedResultTime:
+                        type: string
+                        format: date-time
+                        example: "2025-11-28T14:32:15Z"
+                  message:
+                    type: string
+                    example: "Roulette spinning! Result will be available via SSE."
+        '404':
+          description: Game ID introuvable
+
+  /games/roulette/result/{gameId}:
+    get:
+      tags:
+        - Game
+      summary: Récupérer le résultat d'une partie
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Résultat de la partie
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/GameResult'
+        '404':
+          description: Partie introuvable
+
+  /games/roulette/history:
+    get:
+      tags:
+        - Game
+      summary: Historique des parties jouées
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Historique des parties
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      games:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/GameHistory'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  /games/roulette/active:
+    get:
+      tags:
+        - Game
+      summary: Récupérer la partie active de l'utilisateur
+      responses:
+        '200':
+          description: Partie active
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    nullable: true
+                    properties:
+                      gameId:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        enum: [betting, spinning, completed]
+                      bets:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PlacedBet'
+                      totalAmount:
+                        type: integer
+        '204':
+          description: Aucune partie active
+
+  # ==================== CHAT SERVICE (SSE) ====================
+  /chat/stream:
+    get:
+      tags:
+        - Chat
+      summary: Stream SSE des événements du chat
+      description: |
+        Connexion SSE pour recevoir en temps réel :
+        - Les résultats de tous les joueurs
+        - Les gros gains (big wins)
+        - Les événements du casino
+      parameters:
+        - name: lastEventId
+          in: query
+          description: ID du dernier événement reçu (pour reconnexion)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stream SSE établi
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: |
+                  event: game_result
+                  id: evt_1234567890
+                  data: {"type":"game_result","gameId":"8d0f7780-8536-51ef-055c-f18gc2g01bf8","player":{"username":"Player123","avatar":"https://cdn.coincoincasino.com/avatars/avatar1.png","level":5},"game":"roulette","bet":5000,"result":"win","payout":10000,"winningNumber":17,"timestamp":"2025-11-28T14:32:15Z"}
+
+                  event: big_win
+                  id: evt_1234567891
+                  data: {"type":"big_win","player":{"username":"HighRoller","avatar":"https://cdn.coincoincasino.com/avatars/avatar5.png","level":12},"game":"roulette","betAmount":50000,"winAmount":1800000,"multiplier":36,"timestamp":"2025-11-28T14:35:22Z"}
+
+                  event: heartbeat
+                  data: {"type":"heartbeat","timestamp":"2025-11-28T14:35:30Z"}
+              examples:
+                game_result:
+                  value: |
+                    event: game_result
+                    id: evt_1234567890
+                    data: {"type":"game_result","gameId":"abc-123","player":{"username":"Player123","avatar":"https://cdn.coincoincasino.com/avatars/avatar1.png","level":5},"game":"roulette","bet":5000,"result":"win","payout":10000,"winningNumber":17,"timestamp":"2025-11-28T14:32:15Z"}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /chat/history:
+    get:
+      tags:
+        - Chat
+      summary: Récupérer l'historique du chat
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: before
+          in: query
+          description: Récupérer les messages avant cet ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Historique du chat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      events:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ChatEvent'
+                      hasMore:
+                        type: boolean
+                        example: true
+
+  # ==================== STATS SERVICE ====================
+  /stats/dashboard:
+    get:
+      tags:
+        - Stats
+      summary: Dashboard avec statistiques globales
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [today, 7days, 30days, all]
+            default: all
+      responses:
+        '200':
+          description: Statistiques du joueur
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/DashboardStats'
+
+  /stats/stream:
+    get:
+      tags:
+        - Stats
+      summary: Stream SSE des mises à jour de stats
+      description: |
+        Connexion SSE pour recevoir en temps réel :
+        - Mise à jour du solde
+        - Nouvelles stats après chaque partie
+      responses:
+        '200':
+          description: Stream SSE établi
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: |
+                  event: balance_update
+                  data: {"type":"balance_update","balanceCCC":55000,"balanceUSD":55.00,"change":10000,"timestamp":"2025-11-28T14:32:15Z"}
+
+                  event: stats_update
+                  data: {"type":"stats_update","totalWagered":250000,"totalWon":180000,"totalLost":70000,"winLossRatio":2.57,"gamesPlayed":52,"timestamp":"2025-11-28T14:32:15Z"}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /stats/leaderboard:
+    get:
+      tags:
+        - Stats
+      summary: Classement des joueurs
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [today, 7days, 30days, all]
+            default: 30days
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [totalWon, biggestWin, gamesPlayed, winRate]
+            default: totalWon
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+      responses:
+        '200':
+          description: Leaderboard
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      leaderboard:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/LeaderboardEntry'
+                      userRank:
+                        type: integer
+                        example: 42
+                        description: Position de l'utilisateur connecté
+
+  # ==================== ADMIN ENDPOINTS ====================
+  /admin/users:
+    get:
+      tags:
+        - Admin
+      summary: Liste des utilisateurs (Admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Liste des utilisateurs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      users:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/UserProfile'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/games/stats:
+    get:
+      tags:
+        - Admin
+      summary: Statistiques globales des jeux (Admin)
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [today, 7days, 30days, all]
+      responses:
+        '200':
+          description: Stats globales
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      totalGames:
+                        type: integer
+                        example: 15420
+                      totalWagered:
+                        type: integer
+                        example: 50000000
+                      totalPaidOut:
+                        type: integer
+                        example: 47500000
+                      houseEdge:
+                        type: number
+                        format: float
+                        example: 5.0
+                      activeUsers:
+                        type: integer
+                        example: 328
+
+# ==================== COMPONENTS ====================
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtenu via /auth/login
+
+  schemas:
+    # ===== USER SCHEMAS =====
+    User:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        username:
+          type: string
+          example: "Player123"
+        email:
+          type: string
+          format: email
+          example: "player@example.com"
+        role:
+          type: string
+          enum: [user, vip, admin]
+          example: "user"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+
+    UserProfile:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            avatar:
+              type: string
+              format: uri
+              example: "https://cdn.coincoincasino.com/avatars/avatar1.png"
+            level:
+              type: integer
+              example: 5
+              description: Niveau du joueur
+            xp:
+              type: integer
+              example: 2500
+              description: Points d'expérience
+            xpToNextLevel:
+              type: integer
+              example: 3000
+            bio:
+              type: string
+              example: "Roulette enthusiast!"
+            stats:
+              type: object
+              properties:
+                gamesPlayed:
+                  type: integer
+                  example: 152
+                totalWon:
+                  type: integer
+                  example: 250000
+                biggestWin:
+                  type: integer
+                  example: 180000
+            verified:
+              type: boolean
+              example: true
+
+    # ===== WALLET SCHEMAS =====
+    Deposit:
+      type: object
+      properties:
+        depositId:
+          type: string
+          format: uuid
+          example: "d7e8f901-2b3c-4d5e-6f7g-8h9i0j1k2l3m"
+        txHash:
+          type: string
+          example: "0xabc123def456..."
+          description: Hash de la transaction blockchain
+        token:
+          type: string
+          enum: [ETH, USDC]
+          example: "USDC"
+        amountToken:
+          type: string
+          example: "10.5"
+          description: Montant de crypto déposé
+        amountCCC:
+          type: integer
+          example: 10500
+          description: Montant de CCC crédité
+        amountUSD:
+          type: number
+          format: float
+          example: 10.50
+        status:
+          type: string
+          enum: [pending, confirmed, failed]
+          example: "confirmed"
+        confirmations:
+          type: integer
+          example: 12
+        requiredConfirmations:
+          type: integer
+          example: 12
+        createdAt:
+          type: string
+          format: date-time
+        confirmedAt:
+          type: string
+          format: date-time
+
+    Withdrawal:
+      type: object
+      properties:
+        withdrawalId:
+          type: string
+          format: uuid
+        txHash:
+          type: string
+          example: "0xdef789ghi012..."
+          nullable: true
+        token:
+          type: string
+          enum: [ETH, USDC]
+        amountCCC:
+          type: integer
+          example: 50000
+        amountToken:
+          type: string
+          example: "25.0"
+        amountUSD:
+          type: number
+          format: float
+          example: 50.00
+        address:
+          type: string
+          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1"
+        status:
+          type: string
+          enum: [pending, processing, completed, failed, cancelled]
+          example: "processing"
+        createdAt:
+          type: string
+          format: date-time
+        processedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    Transaction:
+      type: object
+      properties:
+        transactionId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [deposit, withdrawal, bet, win, loss, refund]
+          example: "bet"
+        amount:
+          type: integer
+          example: 5000
+          description: Montant en CCC
+        balanceBefore:
+          type: integer
+          example: 50000
+        balanceAfter:
+          type: integer
+          example: 45000
+        reference:
+          type: string
+          description: ID de la partie/dépôt/retrait lié
+          example: "game_abc123"
+        description:
+          type: string
+          example: "Bet on Roulette #17"
+        createdAt:
+          type: string
+          format: date-time
+
+    # ===== GAME SCHEMAS =====
+    RouletteConfig:
+      type: object
+      properties:
+        gameType:
+          type: string
+          example: "european_roulette"
+        numbers:
+          type: array
+          items:
+            type: integer
+          example: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36]
+        betTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/BetType'
+        limits:
+          type: object
+          properties:
+            minBet:
+              type: integer
+              example: 2000
+              description: Mise minimum (2 CCC = 2$)
+            maxBet:
+              type: integer
+              example: 1000000
+              description: Mise maximum par pari
+            maxTotalBet:
+              type: integer
+              example: 5000000
+              description: Mise maximum totale par spin
+
+    BetType:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: 
+            - straight
+            - split
+            - street
+            - corner
+            - line
+            - dozen
+            - column
+            - red
+            - black
+            - even
+            - odd
+            - low
+            - high
+          example: "straight"
+        name:
+          type: string
+          example: "Straight Up"
+        description:
+          type: string
+          example: "Bet on a single number"
+        payout:
+          type: integer
+          example: 35
+          description: Multiplicateur de gain (35:1 pour straight)
+        minBet:
+          type: integer
+          example: 2000
+        maxBet:
+          type: integer
+          example: 10000
+
+    BetRequest:
+      type: object
+      required:
+        - bets
+      properties:
+        gameId:
+          type: string
+          format: uuid
+          description: ID de partie existante (si continuer à parier)
+          nullable: true
+        bets:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+              - type
+              - amount
+            properties:
+              type:
+                type: string
+                enum: 
+                  - straight
+                  - split
+                  - street
+                  - corner
+                  - line
+                  - dozen
+                  - column
+                  - red
+                  - black
+                  - even
+                  - odd
+                  - low
+                  - high
+                example: "straight"
+              amount:
+                type: integer
+                minimum: 2000
+                example: 5000
+                description: Montant en CCC
+              selection:
+                oneOf:
+                  - type: integer
+                    minimum: 0
+                    maximum: 36
+                    description: Pour straight, split, etc.
+                  - type: array
+                    items:
+                      type: integer
+                    description: Pour split (2 numéros), street (3), corner (4), line (6)
+                  - type: string
+                    enum: [first_dozen, second_dozen, third_dozen, first_column, second_column, third_column]
+                    description: Pour douzaines et colonnes
+                example: 17
+
+    PlacedBet:
+      type: object
+      properties:
+        betId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          example: "straight"
+        selection:
+          oneOf:
+            - type: integer
+            - type: array
+              items:
+                type: integer
+            - type: string
+          example: 17
+        amount:
+          type: integer
+          example: 5000
+        potentialPayout:
+          type: integer
+          example: 180000
+          description: Gain potentiel (amount * payout)
+        payout:
+          type: integer
+          example: 35
+
+    GameResult:
+      type: object
+      properties:
+        gameId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [completed]
+          example: "completed"
+        winningNumber:
+          type: integer
+          minimum: 0
+          maximum: 36
+          example: 17
+        winningColor:
+          type: string
+          enum: [red, black, green]
+          example: "black"
+        randomOrgData:
+          type: object
+          description: Données de vérification de Random.org
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+            randomValue:
+              type: integer
+            signature:
+              type: string
+        bets:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/PlacedBet'
+              - type: object
+                properties:
+                  result:
+                    type: string
+                    enum: [win, loss]
+                    example: "win"
+                  payout:
+                    type: integer
+                    example: 10000
+                    description: Gain réel (0 si perte)
+        totalBet:
+          type: integer
+          example: 5000
+        totalPayout:
+          type: integer
+          example: 10000
+        netProfit:
+          type: integer
+          example: 5000
+          description: Profit net (payout - bet), peut être négatif
+        balanceBefore:
+          type: integer
+          example: 45000
+        balanceAfter:
+          type: integer
+          example: 55000
+        playedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+
+    GameHistory:
+      type: object
+      properties:
+        gameId:
+          type: string
+          format: uuid
+        game:
+          type: string
+          example: "roulette"
+        status:
+          type: string
+          enum: [completed, cancelled]
+        totalBet:
+          type: integer
+          example: 5000
+        totalPayout:
+          type: integer
+          example: 10000
+        netProfit:
+          type: integer
+          example: 5000
+        result:
+          type: string
+          enum: [win, loss]
+          example: "win"
+        playedAt:
+          type: string
+          format: date-time
+
+    # ===== CHAT/SSE SCHEMAS =====
+    ChatEvent:
+      type: object
+      properties:
+        eventId:
+          type: string
+          example: "evt_1234567890"
+        type:
+          type: string
+          enum: [game_result, big_win, system_message, heartbeat]
+        data:
+          oneOf:
+            - $ref: '#/components/schemas/GameResultEvent'
+            - $ref: '#/components/schemas/BigWinEvent'
+            - $ref: '#/components/schemas/SystemMessageEvent'
+        timestamp:
+          type: string
+          format: date-time
+
+    GameResultEvent:
+      type: object
+      properties:
+        type:
+          type: string
+          example: "game_result"
+        gameId:
+          type: string
+          format: uuid
+        player:
+          $ref: '#/components/schemas/PlayerInfo'
+        game:
+          type: string
+          example: "roulette"
+        bet:
+          type: integer
+          example: 5000
+        result:
+          type: string
+          enum: [win, loss]
+        payout:
+          type: integer
+          example: 10000
+        winningNumber:
+          type: integer
+          example: 17
+        timestamp:
+          type: string
+          format: date-time
+
+    BigWinEvent:
+      type: object
+      properties:
+        type:
+          type: string
+          example: "big_win"
+        player:
+          $ref: '#/components/schemas/PlayerInfo'
+        game:
+          type: string
+          example: "roulette"
+        betAmount:
+          type: integer
+          example: 50000
+        winAmount:
+          type: integer
+          example: 1800000
+        multiplier:
+          type: number
+          format: float
+          example: 36
+        timestamp:
+          type: string
+          format: date-time
+
+    SystemMessageEvent:
+      type: object
+      properties:
+        type:
+          type: string
+          example: "system_message"
+        message:
+          type: string
+          example: "Server maintenance in 10 minutes"
+        level:
+          type: string
+          enum: [info, warning, error]
+        timestamp:
+          type: string
+          format: date-time
+
+    PlayerInfo:
+      type: object
+      properties:
+        username:
+          type: string
+          example: "Player123"
+        avatar:
+          type: string
+          format: uri
+          example: "https://cdn.coincoincasino.com/avatars/avatar1.png"
+        level:
+          type: integer
+          example: 5
+
+    # ===== STATS SCHEMAS =====
+    DashboardStats:
+      type: object
+      properties:
+        period:
+          type: string
+          enum: [today, 7days, 30days, all]
+          example: "all"
+        balance:
+          type: object
+          properties:
+            current:
+              type: integer
+              example: 55000
+            currentUSD:
+              type: number
+              format: float
+              example: 55.00
+        totals:
+          type: object
+          properties:
+            gamesPlayed:
+              type: integer
+              example: 152
+            totalWagered:
+              type: integer
+              example: 500000
+            totalWageredUSD:
+              type: number
+              example: 500.00
+            totalWon:
+              type: integer
+              example: 280000
+            totalWonUSD:
+              type: number
+              example: 280.00
+            totalLost:
+              type: integer
+              example: 220000
+            totalLostUSD:
+              type: number
+              example: 220.00
+            netProfit:
+              type: integer
+              example: 60000
+              description: Peut être négatif
+            netProfitUSD:
+              type: number
+              example: 60.00
+        winStats:
+          type: object
+          properties:
+            wins:
+              type: integer
+              example: 72
+            losses:
+              type: integer
+              example: 80
+            winRate:
+              type: number
+              format: float
+              example: 47.37
+              description: Pourcentage
+            winLossRatio:
+              type: number
+              format: float
+              example: 1.27
+            biggestWin:
+              type: integer
+              example: 180000
+            biggestLoss:
+              type: integer
+              example: 50000
+            averageWin:
+              type: integer
+              example: 3888
+            averageLoss:
+              type: integer
+              example: 2750
+            currentStreak:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [win, loss]
+                  example: "win"
+                count:
+                  type: integer
+                  example: 3
+        byGame:
+          type: object
+          properties:
+            roulette:
+              type: object
+              properties:
+                gamesPlayed:
+                  type: integer
+                  example: 152
+                totalWagered:
+                  type: integer
+                  example: 500000
+                netProfit:
+                  type: integer
+                  example: 60000
+                winRate:
+                  type: number
+                  example: 47.37
+        recentGames:
+          type: array
+          items:
+            $ref: '#/components/schemas/GameHistory'
+          description: 10 dernières parties
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank:
+          type: integer
+          example: 1
+        player:
+          $ref: '#/components/schemas/PlayerInfo'
+        stats:
+          type: object
+          properties:
+            totalWon:
+              type: integer
+              example: 5000000
+            totalWonUSD:
+              type: number
+              example: 5000.00
+            gamesPlayed:
+              type: integer
+              example: 850
+            biggestWin:
+              type: integer
+              example: 1800000
+            winRate:
+              type: number
+              format: float
+              example: 52.35
+
+    # ===== COMMON SCHEMAS =====
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 152
+        totalPages:
+          type: integer
+          example: 8
+        hasNext:
+          type: boolean
+          example: true
+        hasPrev:
+          type: boolean
+          example: false
+
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "INSUFFICIENT_BALANCE"
+            message:
+              type: string
+              example: "Insufficient balance to place bet"
+            details:
+              type: object
+              nullable: true
+
+  responses:
+    BadRequest:
+      description: Requête invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Invalid request parameters"
+              details:
+                field: "amount"
+                issue: "Must be at least 2000 CCC"
+
+    Unauthorized:
+      description: Non authentifié ou token invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            error:
+              code: "UNAUTHORIZED"
+              message: "Invalid or expired token"
+
+    Forbidden:
+      description: Accès refusé
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            error:
+              code: "FORBIDDEN"
+              message: "Insufficient permissions"
+
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            error:
+              code: "NOT_FOUND"
+              message: "Resource not found"
+
+    InternalError:
+      description: Erreur serveur
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            success: false
+            error:
+              code: "INTERNAL_ERROR"
+              message: "An unexpected error occurred"

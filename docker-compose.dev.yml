@@ -1,0 +1,306 @@
+version: '3.8'
+
+# ==============================================
+# DEVELOPMENT ENVIRONMENT
+# Hot reload, volumes montés, ports exposés
+# ==============================================
+
+services:
+  # ==============================================
+  # NGINX REVERSE PROXY
+  # ==============================================
+  nginx:
+    image: nginx:alpine
+    container_name: coincoincasino-nginx-dev
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - auth
+      - wallet
+      - game-engine
+      - chat
+      - stats
+      - coinmarketcap
+    networks:
+      - casino-network
+    restart: unless-stopped
+
+  # ==============================================
+  # FRONTEND (Next.js) - DEV MODE
+  # ==============================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: coincoincasino-frontend-dev
+    ports:
+      - "3000:3000"  # Exposé pour accès direct si besoin
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost
+    volumes:
+      - ./frontend/src:/app/src:cached
+      - ./frontend/public:/app/public:cached
+      - ./frontend/package.json:/app/package.json:cached
+      - ./frontend/tsconfig.json:/app/tsconfig.json:cached
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - casino-network
+    command: npm run dev
+
+  # ==============================================
+  # MICROSERVICES - DEV MODE
+  # ==============================================
+  
+  # Auth Service
+  auth:
+    build:
+      context: ./services/auth
+      dockerfile: Dockerfile.dev
+    container_name: coincoincasino-auth-dev
+    ports:
+      - "8001:8001"  # Exposé pour test direct
+    environment:
+      - NODE_ENV=development
+      - PORT=8001
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
+      - MONGO_DB_NAME=casino_auth
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./services/auth/src:/app/src:cached
+      - ./services/auth/package.json:/app/package.json:cached
+      - /app/node_modules
+    depends_on:
+      - mongodb
+      - rabbitmq
+      - redis
+    networks:
+      - casino-network
+    command: npm run dev
+
+  # Wallet Service
+  wallet:
+    build:
+      context: ./services/wallet
+      dockerfile: Dockerfile.dev
+    container_name: coincoincasino-wallet-dev
+    ports:
+      - "8002:8002"
+    environment:
+      - NODE_ENV=development
+      - PORT=8002
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
+      - MONGO_DB_NAME=casino_wallet
+      - POLYGON_RPC_URL=${POLYGON_RPC_URL}
+      - CCC_TOKEN_ADDRESS=${CCC_TOKEN_ADDRESS}
+      - HOT_WALLET_PRIVATE_KEY=${HOT_WALLET_PRIVATE_KEY}
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - REDIS_URL=redis://redis:6379
+      - CMC_SERVICE_URL=http://coinmarketcap:8007
+    volumes:
+      - ./services/wallet/src:/app/src:cached
+      - ./services/wallet/package.json:/app/package.json:cached
+      - /app/node_modules
+    depends_on:
+      - mongodb
+      - rabbitmq
+      - redis
+      - coinmarketcap
+    networks:
+      - casino-network
+    command: npm run dev
+
+  # Game Engine Service
+  game-engine:
+    build:
+      context: ./services/game-engine
+      dockerfile: Dockerfile.dev
+    container_name: coincoincasino-game-engine-dev
+    ports:
+      - "8003:8003"
+    environment:
+      - NODE_ENV=development
+      - PORT=8003
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
+      - MONGO_DB_NAME=casino_games
+      - RANDOM_ORG_API_KEY=${RANDOM_ORG_API_KEY}
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./services/game-engine/src:/app/src:cached
+      - ./services/game-engine/package.json:/app/package.json:cached
+      - /app/node_modules
+    depends_on:
+      - mongodb
+      - rabbitmq
+      - redis
+    networks:
+      - casino-network
+    command: npm run dev
+
+  # Chat Service (SSE)
+  chat:
+    build:
+      context: ./services/chat
+      dockerfile: Dockerfile.dev
+    container_name: coincoincasino-chat-dev
+    ports:
+      - "8004:8004"
+    environment:
+      - NODE_ENV=development
+      - PORT=8004
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
+      - MONGO_DB_NAME=casino_chat
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./services/chat/src:/app/src:cached
+      - ./services/chat/package.json:/app/package.json:cached
+      - /app/node_modules
+    depends_on:
+      - mongodb
+      - rabbitmq
+      - redis
+    networks:
+      - casino-network
+    command: npm run dev
+
+  # Stats Service (SSE)
+  stats:
+    build:
+      context: ./services/stats
+      dockerfile: Dockerfile.dev
+    container_name: coincoincasino-stats-dev
+    ports:
+      - "8005:8005"
+    environment:
+      - NODE_ENV=development
+      - PORT=8005
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
+      - MONGO_DB_NAME=casino_stats
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./services/stats/src:/app/src:cached
+      - ./services/stats/package.json:/app/package.json:cached
+      - /app/node_modules
+    depends_on:
+      - mongodb
+      - rabbitmq
+      - redis
+    networks:
+      - casino-network
+    command: npm run dev
+
+  # Notifier Service
+  notifier:
+    build:
+      context: ./services/notifier
+      dockerfile: Dockerfile.dev
+    container_name: coincoincasino-notifier-dev
+    ports:
+      - "8006:8006"
+    environment:
+      - NODE_ENV=development
+      - PORT=8006
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./services/notifier/src:/app/src:cached
+      - ./services/notifier/package.json:/app/package.json:cached
+      - /app/node_modules
+    depends_on:
+      - rabbitmq
+      - redis
+    networks:
+      - casino-network
+    command: npm run dev
+
+  # CoinMarketCap Service
+  coinmarketcap:
+    build:
+      context: ./services/coinmarketcap
+      dockerfile: Dockerfile.dev
+    container_name: coincoincasino-cmc-dev
+    ports:
+      - "8007:8007"
+    environment:
+      - NODE_ENV=development
+      - PORT=8007
+      - CMC_API_KEY=${CMC_API_KEY}
+      - REDIS_URL=redis://redis:6379
+      - CACHE_TTL=300
+    volumes:
+      - ./services/coinmarketcap/src:/app/src:cached
+      - ./services/coinmarketcap/package.json:/app/package.json:cached
+      - /app/node_modules
+    depends_on:
+      - redis
+    networks:
+      - casino-network
+    command: npm run dev
+
+  # ==============================================
+  # DATABASES & MESSAGE QUEUE
+  # ==============================================
+  
+  mongodb:
+    image: mongo:7
+    container_name: coincoincasino-mongodb-dev
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=casino_admin
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+      - MONGO_INITDB_DATABASE=casino_main
+    volumes:
+      - mongodb_data_dev:/data/db
+      - ./scripts/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - casino-network
+    restart: unless-stopped
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: coincoincasino-redis-dev
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data_dev:/data
+    networks:
+      - casino-network
+    restart: unless-stopped
+
+  # RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: coincoincasino-rabbitmq-dev
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=casino_rabbit
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data_dev:/var/lib/rabbitmq
+    networks:
+      - casino-network
+    restart: unless-stopped
+
+networks:
+  casino-network:
+    driver: bridge
+
+volumes:
+  mongodb_data_dev:
+  redis_data_dev:
+  rabbitmq_data_dev:

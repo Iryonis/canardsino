@@ -1,0 +1,436 @@
+version: '3.8'
+
+# ==============================================
+# PRODUCTION ENVIRONMENT
+# Images optimisées, pas de volumes, ports minimaux
+# ==============================================
+
+services:
+  # ==============================================
+  # NGINX REVERSE PROXY
+  # ==============================================
+  nginx:
+    image: nginx:alpine
+    container_name: coincoincasino-nginx-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - auth
+      - wallet
+      - game-engine
+      - chat
+      - stats
+      - coinmarketcap
+    networks:
+      - casino-network
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==============================================
+  # FRONTEND (Next.js) - PRODUCTION
+  # ==============================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: coincoincasino-frontend-prod
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=https://api.coincoincasino.com
+    networks:
+      - casino-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==============================================
+  # MICROSERVICES - PRODUCTION
+  # ==============================================
+  
+  # Auth Service
+  auth:
+    build:
+      context: ./services/auth
+      dockerfile: Dockerfile.prod
+    container_name: coincoincasino-auth-prod
+    environment:
+      - NODE_ENV=production
+      - PORT=8001
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
+      - MONGO_DB_NAME=casino_auth
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - casino-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Wallet Service
+  wallet:
+    build:
+      context: ./services/wallet
+      dockerfile: Dockerfile.prod
+    container_name: coincoincasino-wallet-prod
+    environment:
+      - NODE_ENV=production
+      - PORT=8002
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
+      - MONGO_DB_NAME=casino_wallet
+      - POLYGON_RPC_URL=${POLYGON_RPC_URL}
+      - CCC_TOKEN_ADDRESS=${CCC_TOKEN_ADDRESS}
+      - HOT_WALLET_PRIVATE_KEY=${HOT_WALLET_PRIVATE_KEY}
+      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - CMC_SERVICE_URL=http://coinmarketcap:8007
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      coinmarketcap:
+        condition: service_started
+    networks:
+      - casino-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Game Engine Service
+  game-engine:
+    build:
+      context: ./services/game-engine
+      dockerfile: Dockerfile.prod
+    container_name: coincoincasino-game-engine-prod
+    environment:
+      - NODE_ENV=production
+      - PORT=8003
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
+      - MONGO_DB_NAME=casino_games
+      - RANDOM_ORG_API_KEY=${RANDOM_ORG_API_KEY}
+      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - casino-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Chat Service (SSE)
+  chat:
+    build:
+      context: ./services/chat
+      dockerfile: Dockerfile.prod
+    container_name: coincoincasino-chat-prod
+    environment:
+      - NODE_ENV=production
+      - PORT=8004
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
+      - MONGO_DB_NAME=casino_chat
+      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - casino-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Stats Service (SSE)
+  stats:
+    build:
+      context: ./services/stats
+      dockerfile: Dockerfile.prod
+    container_name: coincoincasino-stats-prod
+    environment:
+      - NODE_ENV=production
+      - PORT=8005
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
+      - MONGO_DB_NAME=casino_stats
+      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - casino-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Notifier Service
+  notifier:
+    build:
+      context: ./services/notifier
+      dockerfile: Dockerfile.prod
+    container_name: coincoincasino-notifier-prod
+    environment:
+      - NODE_ENV=production
+      - PORT=8006
+      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - EMAIL_SERVICE=${EMAIL_SERVICE}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - casino-network
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  # CoinMarketCap Service
+  coinmarketcap:
+    build:
+      context: ./services/coinmarketcap
+      dockerfile: Dockerfile.prod
+    container_name: coincoincasino-cmc-prod
+    environment:
+      - NODE_ENV=production
+      - PORT=8007
+      - CMC_API_KEY=${CMC_API_KEY}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - CACHE_TTL=300
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - casino-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8007/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  # ==============================================
+  # DATABASES & MESSAGE QUEUE
+  # ==============================================
+  
+# MongoDB
+  mongodb:
+    image: mongo:7
+    container_name: coincoincasino-mongodb-prod
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=casino_admin
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+      - MONGO_INITDB_DATABASE=casino_main
+    volumes:
+      - mongodb_data_prod:/data/db
+      - ./backups:/backups
+    networks:
+      - casino-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: coincoincasino-redis-prod
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data_prod:/data
+    networks:
+      - casino-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: coincoincasino-rabbitmq-prod
+    ports:
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=casino_rabbit
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data_prod:/var/lib/rabbitmq
+    networks:
+      - casino-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+networks:
+  casino-network:
+    driver: bridge
+
+volumes:
+  mongodb_data_prod:
+  redis_data_prod:
+  rabbitmq_data_prod:

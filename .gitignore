@@ -1,0 +1,80 @@
+# ==============================================
+# CoinCoin Casino - .gitignore
+# ==============================================
+
+# Environment Variables
+.env
+.env.local
+.env.production
+.env.development
+
+# ==============================================
+# SSL Certificates (NEVER COMMIT!)
+# ==============================================
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt
+*.pem
+*.key
+*.crt
+
+# ==============================================
+# Node.js / Frontend
+# ==============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# ==============================================
+# Docker
+# ==============================================
+*.log
+docker-compose.override.yml
+
+# ==============================================
+# Databases
+# ==============================================
+*.sql.backup
+redis_data/
+rabbitmq_data/
+
+# ==============================================
+# IDEs
+# ==============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ==============================================
+# Testing
+# ==============================================
+coverage/
+.nyc_output/
+
+# ==============================================
+# Private Keys & Secrets (CRITICAL!)
+# ==============================================
+*.private
+*_private_key
+wallet_keys/
+keys/
+secrets/
+
+# ==============================================
+# Logs
+# ==============================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
