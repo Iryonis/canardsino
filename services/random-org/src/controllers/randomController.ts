@@ -2,6 +2,14 @@ import { Request, Response } from 'express';
 
 const RANDOM_ORG_API_KEY = process.env.RANDOM_ORG_API_KEY;
 
+interface RandomOrgResponse {
+  result: {
+    random: {
+      data: number[];
+    };
+  };
+}
+
 /**
  * Get a random roulette number from Random.org API
  * @param req 
@@ -29,7 +37,7 @@ export async function fetchRouletteNumber(req: Request, res: Response) {
       })
     });
 
-    const data = await response.json();
+    const data = await response.json() as RandomOrgResponse;
     const number = data.result.random.data[0];
     
     const result = {
