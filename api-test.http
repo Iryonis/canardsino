@@ -1,0 +1,136 @@
+### Variables
+@baseUrl = http://localhost:8001
+@authUrl = {{baseUrl}}/auth
+
+### Health Check
+GET {{baseUrl}}/health
+
+###
+### AUTH SERVICE
+###
+
+### Register new user
+# @name register
+POST {{authUrl}}/register
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "username": "testuser",
+  "password": "password123"
+}
+
+### Login user
+# @name login
+POST {{authUrl}}/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "password123"
+}
+
+### Refresh token
+# @name refresh
+POST {{authUrl}}/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{login.response.body.tokens.refreshToken}}"
+}
+
+### Get user profile (requires authentication)
+# @name profile
+GET {{authUrl}}/profile
+Authorization: Bearer {{login.response.body.tokens.accessToken}}
+
+###
+### Test with different user
+###
+
+### Register second user
+POST {{authUrl}}/register
+Content-Type: application/json
+
+{
+  "email": "alice@example.com",
+  "username": "alice",
+  "password": "alicepass123"
+}
+
+### Login second user
+# @name loginAlice
+POST {{authUrl}}/login
+Content-Type: application/json
+
+{
+  "email": "alice@example.com",
+  "password": "alicepass123"
+}
+
+### Get Alice's profile
+GET {{authUrl}}/profile
+Authorization: Bearer {{loginAlice.response.body.tokens.accessToken}}
+
+###
+### Error cases
+###
+
+### Register with existing email (should fail)
+POST {{authUrl}}/register
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "username": "anotheruser",
+  "password": "password123"
+}
+
+### Register with invalid email (should fail)
+POST {{authUrl}}/register
+Content-Type: application/json
+
+{
+  "email": "invalid-email",
+  "username": "testuser2",
+  "password": "password123"
+}
+
+### Register with short password (should fail)
+POST {{authUrl}}/register
+Content-Type: application/json
+
+{
+  "email": "test2@example.com",
+  "username": "testuser2",
+  "password": "short"
+}
+
+### Login with wrong password (should fail)
+POST {{authUrl}}/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "wrongpassword"
+}
+
+### Login with non-existent user (should fail)
+POST {{authUrl}}/login
+Content-Type: application/json
+
+{
+  "email": "nonexistent@example.com",
+  "password": "password123"
+}
+
+### Get profile without token (should fail)
+GET {{authUrl}}/profile
+
+### Refresh with invalid token (should fail)
+POST {{authUrl}}/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "invalid.token.here"
+}
