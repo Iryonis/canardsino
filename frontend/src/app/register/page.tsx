@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../hooks/useAuth';
+import { ValidationError, NetworkError, ApiError } from '../../lib/apiErrors';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -35,8 +36,16 @@ export default function RegisterPage() {
     try {
       await register({ email, username, password });
       router.push('/');
-    } catch (err: any) {
-      setError(err.message || 'Failed to register');
+    } catch (err: unknown) {
+      if (err instanceof ValidationError) {
+        setError('Invalid registration data. Please check your inputs');
+      } else if (err instanceof NetworkError) {
+        setError('Network error. Please check your connection');
+      } else if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to register');
+      }
     } finally {
       setIsLoading(false);
     }

@@ -1,5 +1,7 @@
 // API client for CoinCoin Casino
 
+import { AuthError, NetworkError, NotFoundError, ServerError, ValidationError, ApiError } from './apiErrors';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost';
 
 export interface User {
@@ -28,13 +30,6 @@ export interface RegisterRequest {
   email: string;
   username: string;
   password: string;
-}
-
-class ApiError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-    this.name = 'ApiError';
-  }
 }
 
 // Token management
@@ -79,17 +74,47 @@ async function fetchApi<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new ApiError(response.status, error.error || 'Request failed');
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      
+      // Throw specific error types based on status code
+      switch (response.status) {
+        case 401:
+          throw new AuthError(error.error || 'Authentication failed');
+        case 400:
+        case 422:
+          throw new ValidationError(error.error || 'Validation failed');
+        case 404:
+          throw new NotFoundError(error.error || 'Resource not found');
+        case 500:
+        case 502:
+        case 503:
+          throw new ServerError(error.error || 'Server error');
+        default:
+          throw new ApiError(
+            error.error || 'Request failed',
+            response.status,
+            `HTTP_${response.status}`
+          );
+      }
+    }
+
+    return response.json();
+  } catch (err) {
+    // Re-throw if it's already one of our custom errors
+    if (err instanceof ApiError) {
+      throw err;
+    }
+    
+    // Otherwise it's a network error
+    throw new NetworkError(err instanceof Error ? err.message : 'Network error occurred');
   }
-
-  return response.json();
 }
 
 // Auth API methods
