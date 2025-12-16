@@ -1,0 +1,50 @@
+name: Services CI
+
+on:
+  workflow_call:
+  push:
+    paths:
+      - 'services/**'
+      - 'shared/**'
+      - '.github/workflows/services.yml'
+  pull_request:
+    paths:
+      - 'services/**'
+      - 'shared/**'
+      - '.github/workflows/services.yml'
+
+jobs:
+  build-services:
+    name: Build Service - ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        service:
+          - auth
+          - chat
+          - coinmarketcap
+          - game-engine
+          - notifier
+          - random-org
+          - stats
+          - wallet
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./services/${{ matrix.service }}
+        run: npm ci
+
+      - name: Build service
+        working-directory: ./services/${{ matrix.service }}
+        run: npm run build

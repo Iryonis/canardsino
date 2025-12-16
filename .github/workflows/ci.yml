@@ -1,0 +1,14 @@
+name: CI/CD Main
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  trigger-frontend:
+    name: Frontend CI
+    uses: ./.github/workflows/frontend.yml
+  
+  trigger-services:
+    name: Services CI
+    uses: ./.github/workflows/services.yml
