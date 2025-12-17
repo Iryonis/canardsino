@@ -37,7 +37,7 @@ export const register = async (req: Request, res: Response) => {
     await user.save();
 
     // Generate tokens
-    const tokenPayload = { userId: user._id.toString(), email: user.email };
+    const tokenPayload = { userId: user._id.toString(), email: user.email, username: user.username };
     const accessToken = generateAccessToken(tokenPayload);
     const refreshToken = generateRefreshToken(tokenPayload);
 
@@ -83,7 +83,7 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // Generate tokens
-    const tokenPayload = { userId: user._id.toString(), email: user.email };
+    const tokenPayload = { userId: user._id.toString(), email: user.email, username: user.username };
     const accessToken = generateAccessToken(tokenPayload);
     const refreshToken = generateRefreshToken(tokenPayload);
 
@@ -119,7 +119,7 @@ export const refresh = async (req: Request, res: Response) => {
     const payload = verifyRefreshToken(refreshToken);
 
     // Generate new access token
-    const accessToken = generateAccessToken({ userId: payload.userId, email: payload.email });
+    const accessToken = generateAccessToken({ userId: payload.userId, email: payload.email, username: payload.username });
 
     return res.status(200).json({ accessToken });
   } catch (error) {

@@ -4,7 +4,7 @@ import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { verifyAccessToken } from '../utils/jwt';
+import { verifyAccessToken } from '../utils/jwtUtils.ts';
 import { parse } from 'url';
 
 dotenv.config();
@@ -83,9 +83,7 @@ wss.on('connection', (ws: AuthenticatedWebSocket, req) => {
    
     const payload = verifyAccessToken(token);
     ws.userId = payload.userId;
-    ws.username = payload.email.split('@')[0]; // Use the beginning of the email as the username
-
-    console.log(`User authenticated: ${ws.username} (${ws.userId})`);
+    ws.username = payload.username;
 
     // Connection message
     broadcastSystemMessage(`${ws.username} has joined the chat`);

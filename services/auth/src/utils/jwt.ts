@@ -6,6 +6,7 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_k
 export interface TokenPayload {
   userId: string;
   email: string;
+  username: string;
 }
 
 export const generateAccessToken = (payload: TokenPayload): string => {

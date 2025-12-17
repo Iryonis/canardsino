@@ -159,6 +159,8 @@ services:
       - PORT=8004
       - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
       - MONGO_DB_NAME=casino_chat
+      - JWT_SECRET=${JWT_SECRET}             
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}  
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - REDIS_URL=redis://redis:6379
     volumes:
