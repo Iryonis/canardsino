@@ -9,7 +9,7 @@ export function ChatButton({ onClick, unreadCount }: ChatButtonProps) {
     return (
         <button
             onClick={onClick}
-            className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-blue-light to-blue-lightest hover:from-blue-lightest hover:to-blue-light text-blue-darkest p-4 rounded-full shadow-2xl transition-transform hover:scale-110"
+            className="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-blue to-blue-dark hover:from-blue-dark hover:to-blue text-blue-lightest p-4 rounded-full shadow-2xl transition-transform hover:scale-110"
         >
             <span className="text-2xl">💬</span>
             {unreadCount > 0 && (

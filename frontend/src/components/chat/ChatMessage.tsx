@@ -11,7 +11,7 @@ export function ChatMessage({ message, currentUsername }: ChatMessageProps) {
     if (message.type === 'system') {
         return (
             <div className="flex justify-center">
-                <div className="bg-blue/30 text-blue-lightest px-3 py-1 rounded-full text-xs italic">
+                <div className="bg-blue/20 text-blue-light/60 px-3 py-1 rounded-full text-xs italic">
                     {message.message}
                 </div>
             </div>
@@ -25,8 +25,8 @@ export function ChatMessage({ message, currentUsername }: ChatMessageProps) {
             <div className={`flex flex-col ${isOwnMessage ? 'items-end' : 'items-start'}`}>
                 <div className={`max-w-[85%] ${
                     isOwnMessage
-                        ? 'bg-gradient-to-r from-blue-light to-blue-lightest text-blue-darkest'
-                        : 'bg-blue-darkest border border-blue text-blue-lightest'
+                        ? 'bg-blue/40 text-blue-lightest border border-blue/30'
+                        : 'bg-blue-darkest/50 border border-blue/20 text-blue-lightest'
                 } rounded-lg px-3 py-2 shadow-lg`}>
                     <div className="font-semibold text-xs mb-1 opacity-80">
                         {message.username}
