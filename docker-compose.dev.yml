@@ -157,8 +157,8 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=8004
-      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
-      - MONGO_DB_NAME=casino_chat
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017?authSource=admin
+      - MONGO_DB_NAME=chat_db
       - JWT_SECRET=${JWT_SECRET}             
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}  
       - RABBITMQ_URL=amqp://rabbitmq:5672
