@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { tokenStorage } from '../lib/api';
 import { Message } from '../components/chat/types';
 
@@ -9,69 +9,72 @@ let globalWsInstance: WebSocket | null = null;
 interface UseWebSocketProps {
     isAuthenticated: boolean;
     username?: string;
-    isOpen: boolean;
     onMessage?: (message: Message) => void;
 }
 
-export function useWebSocket({ isAuthenticated, username, isOpen, onMessage }: UseWebSocketProps) {
+export function useWebSocket({ isAuthenticated, username, onMessage }: UseWebSocketProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const [onlineUsers, setOnlineUsers] = useState(0);
     const wsRef = useRef<WebSocket | null>(null);
     const isInitialMount = useRef(true);
+    const onMessageRef = useRef(onMessage);
 
-    // Reset state when user logs out
+    // Keep onMessage ref up to date without triggering reconnection
     useEffect(() => {
-        if (!isAuthenticated && !isInitialMount.current) {
-            if (globalWsInstance?.readyState === WebSocket.OPEN) {
-                console.log('🔌 Closing WebSocket connection on logout');
-                globalWsInstance.close(1000, 'User logged out');
-                globalWsInstance = null;
+        onMessageRef.current = onMessage;
+    }, [onMessage]);
+
+    /**
+     * Process received WebSocket message
+     */
+    const processMessage = useCallback((message: Message) => {
+        if (message.type === 'userCount') {
+            setOnlineUsers(message.count || 0);
+        } else {
+            setMessages((prev) => [...prev, message]);
+            if (onMessageRef.current) {
+                onMessageRef.current(message);
             }
-            wsRef.current = null;
         }
-        isInitialMount.current = false;
-    }, [isAuthenticated]);
+    }, []);
 
-    // Connect to WebSocket
-    useEffect(() => {
-        if (!isAuthenticated || !username) {
-            return;
-        }
-
-        const token = tokenStorage.getAccessToken();
-        if (!token) {
-            return;
-        }
-
-        const handleMessage = (event: MessageEvent) => {
+    /**
+     * Create WebSocket message handler
+     */
+    const createMessageHandler = useCallback(() => {
+        return (event: MessageEvent) => {
             const message: Message = JSON.parse(event.data);
-            
-            if (message.type === 'userCount') {
-                setOnlineUsers(message.count || 0);
-            } else {
-                setMessages((prev) => [...prev, message]);
-                if (onMessage) {
-                    onMessage(message);
-                }
-            }
+            processMessage(message);
         };
+    }, [processMessage]);
 
-        // Reuse existing connection
-        if (globalWsInstance && globalWsInstance.readyState === WebSocket.OPEN) {
-            if (wsRef.current !== globalWsInstance) {
-                wsRef.current = globalWsInstance;
-                globalWsInstance.onmessage = handleMessage;
-                setTimeout(() => setIsConnected(true), 0);
-            }
-            return;
+    /**
+     * Setup existing WebSocket connection
+     */
+    const setupExistingConnection = useCallback((handleMessage: (event: MessageEvent) => void) => {
+        if (wsRef.current !== globalWsInstance) {
+            wsRef.current = globalWsInstance;
+            globalWsInstance!.onmessage = handleMessage;
+            setTimeout(() => setIsConnected(true), 0);
         }
+    }, []);
 
-        // Don't create a new connection if one already exists
-        if (globalWsInstance) {
-            return;
-        }
+    /**
+     * Reset connection state
+     */
+    const resetConnectionState = useCallback(() => {
+        setIsConnected(false);
+        setOnlineUsers(0);
+        setMessages([]);
+        globalWsInstance = null;
+        wsRef.current = null;
+    }, []);
 
+    /**
+     * Create new WebSocket connection
+     */
+    const createWebSocketConnection = useCallback((token: string, handleMessage: (event: MessageEvent) => void) => {
         const CHAT_WS_URL = process.env.NEXT_PUBLIC_CHAT_WS_URL || 'ws://localhost:8004';
         const ws = new WebSocket(`${CHAT_WS_URL}?token=${token}`);
 
@@ -84,11 +87,7 @@ export function useWebSocket({ isAuthenticated, username, isOpen, onMessage }: U
 
         ws.onclose = (event) => {
             console.log('❌ Disconnected from chat', event.code, event.reason);
-            setIsConnected(false);
-            setOnlineUsers(0);
-            setMessages([]);
-            globalWsInstance = null;
-            wsRef.current = null;
+            resetConnectionState();
         };
 
         ws.onerror = (error) => {
@@ -98,16 +97,63 @@ export function useWebSocket({ isAuthenticated, username, isOpen, onMessage }: U
 
         wsRef.current = ws;
         globalWsInstance = ws;
+    }, [resetConnectionState]);
+
+    /**
+     * Close WebSocket connection
+     */
+    const closeConnection = useCallback(() => {
+        if (globalWsInstance?.readyState === WebSocket.OPEN) {
+            console.log('🔌 Closing WebSocket connection on logout');
+            globalWsInstance.close(1000, 'User logged out');
+            globalWsInstance = null;
+        }
+        wsRef.current = null;
+    }, []);
+
+    // Reset state when user logs out
+    useEffect(() => {
+        if (!isAuthenticated && !isInitialMount.current) {
+            closeConnection();
+        }
+        isInitialMount.current = false;
+    }, [isAuthenticated, closeConnection]);
+
+    // Connect to WebSocket
+    useEffect(() => {
+        if (!isAuthenticated || !username) {
+            return;
+        }
+
+        const token = tokenStorage.getAccessToken();
+        if (!token) {
+            return;
+        }
+
+        const handleMessage = createMessageHandler();
+
+        // Reuse existing connection
+        if (globalWsInstance && globalWsInstance.readyState === WebSocket.OPEN) {
+            setupExistingConnection(handleMessage);
+            return;
+        }
+
+        // Don't create a new connection if one already exists
+        if (globalWsInstance) {
+            return;
+        }
+
+        createWebSocketConnection(token, handleMessage);
 
         return () => {
             console.log('🔄 Component cleanup (connexion maintenue)');
         };
-    }, [isAuthenticated, username, isOpen, onMessage]);
+    }, [isAuthenticated, username, createMessageHandler, setupExistingConnection, createWebSocketConnection]);
 
-    const sendMessage = (message: string) => {
+    const sendMessage = useCallback((message: string) => {
         if (!message.trim() || !wsRef.current || !isConnected) return;
         wsRef.current.send(message);
-    };
+    }, [isConnected]);
 
     return {
         messages,
