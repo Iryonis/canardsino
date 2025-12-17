@@ -134,3 +134,27 @@ Content-Type: application/json
 {
   "refreshToken": "invalid.token.here"
 }
+
+###
+### RANDOM-ORG SERVICE
+###
+
+@randomUrl = http://localhost:8008
+
+### Health Check Random Service
+GET {{randomUrl}}/health
+
+### Get Random Roulette Number (direct access)
+GET {{randomUrl}}/random/roulette
+
+### Get Random Roulette Number (via NGINX)
+GET http://localhost/api/random/roulette
+
+### Test multiple calls (should get different numbers)
+GET {{randomUrl}}/random/roulette
+
+###
+GET {{randomUrl}}/random/roulette
+
+###
+GET {{randomUrl}}/random/roulette

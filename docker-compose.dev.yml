@@ -24,6 +24,7 @@ services:
       - chat
       - stats
       - coinmarketcap
+      - random-org
     networks:
       - casino-network
     restart: unless-stopped
@@ -240,6 +241,29 @@ services:
     volumes:
       - ./services/coinmarketcap/src:/app/src:cached
       - ./services/coinmarketcap/package.json:/app/package.json:cached
+      - /app/node_modules
+    depends_on:
+      - redis
+    networks:
+      - casino-network
+    command: npm run dev
+
+  # Random.org Service
+  random-org:
+    build:
+      context: ./services/random-org
+      dockerfile: Dockerfile.dev
+    container_name: coincoincasino-random-org-dev
+    ports:
+      - "8008:8008"
+    environment:
+      - NODE_ENV=development
+      - PORT=8008
+      - RANDOM_ORG_API_KEY=${RANDOM_ORG_API_KEY}
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./services/random-org/src:/app/src:cached
+      - ./services/random-org/package.json:/app/package.json:cached
       - /app/node_modules
     depends_on:
       - redis
