@@ -21,7 +21,6 @@ export function FloatingChat() {
     const { messages, isConnected, onlineUsers, sendMessage } = useWebSocket({
         isAuthenticated,
         username: user?.username,
-        isOpen,
         onMessage: handleMessage,
     });
 
