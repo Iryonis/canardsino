@@ -8,9 +8,11 @@ interface AuthenticatedWebSocket extends WebSocket {
 
 export class WebSocketService {
     private wss: WebSocketServer;
+    private connectedUsers: Set<string>; // Track unique usernames
 
     constructor(wss: WebSocketServer) {
         this.wss = wss;
+        this.connectedUsers = new Set<string>();
     }
 
     /**
@@ -105,9 +107,46 @@ export class WebSocketService {
     }
 
     /**
-     * Get the number of connected clients
+     * Get the number of unique connected users
      */
     getClientCount(): number {
-        return this.wss.clients.size;
+        return this.connectedUsers.size;
+    }
+
+    /**
+     * Check if a user is already connected
+     */
+    isUserConnected(username: string): boolean {
+        return this.connectedUsers.has(username);
+    }
+
+    /**
+     * Add a user to the connected users set
+     * Returns true if this is a new user connection
+     */
+    addUser(username: string): boolean {
+        const wasConnected = this.connectedUsers.has(username);
+        this.connectedUsers.add(username);
+        return !wasConnected; // Return true if it's a new user
+    }
+
+    /**
+     * Remove a user from the connected users set
+     * Returns true if this was the last connection of this user
+     */
+    removeUser(username: string): boolean {
+        // Check if user has other open connections
+        const hasOtherConnections = Array.from(this.wss.clients).some(
+            (client) => {
+                const authClient = client as AuthenticatedWebSocket;
+                return authClient.username === username && authClient.readyState === WebSocket.OPEN;
+            }
+        );
+
+        if (!hasOtherConnections) {
+            this.connectedUsers.delete(username);
+            return true; // Last connection closed
+        }
+        return false; // User still has other connections
     }
 }
