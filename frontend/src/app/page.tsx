@@ -25,12 +25,6 @@ export default function Home() {
           <div className="flex items-center gap-4">
             {isAuthenticated && user ? (
               <>
-               <Link
-                  href="/chat"
-                  className="px-4 py-2 bg-gradient-to-r from-blue to-blue-light hover:from-blue-light hover:to-blue-lightest text-blue-darkest font-bold rounded-lg transition"
-                >
-                  💬 Chat
-                </Link>
                 <span className="text-blue-light">Welcome, {user.username}!</span>
                 <button
                   onClick={logout}

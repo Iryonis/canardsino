@@ -41,8 +41,11 @@ export class ConnectionHandler {
       // Send recent messages to the new user
       await this.wsService.sendRecentMessages(ws);
 
-      // Announce user connection
-      await this.wsService.broadcastSystemMessage(`${ws.username} has joined the chat`);
+      // Broadcast connection message (no DB save)
+      this.wsService.broadcastSystemMessageNoPersist(`${ws.username} has joined the chat`);
+      
+      // Broadcast user count update
+      this.wsService.broadcastUserCount();
 
       // Setup message handler
       ws.on('message', async (data: Buffer) => {
@@ -87,7 +90,11 @@ export class ConnectionHandler {
     console.log(`User disconnected: ${ws.username}`);
     
     if (ws.username) {
-      await this.wsService.broadcastSystemMessage(`${ws.username} a quitté le chat`);
+      // Broadcast disconnection message (no DB save)
+      this.wsService.broadcastSystemMessageNoPersist(`${ws.username} a quitté le chat`);
     }
+    
+    // Update user count
+    this.wsService.broadcastUserCount();
   }
 }
