@@ -9,9 +9,15 @@ interface AuthState {
   isLoading: boolean;
 }
 
+interface AuthResponse {
+  user: User;
+  accessToken: string;
+  refreshToken: string;
+}
+
 interface AuthContextType extends AuthState {
-  login: (data: LoginRequest) => Promise<any>;
-  register: (data: RegisterRequest) => Promise<any>;
+  login: (data: LoginRequest) => Promise<AuthResponse>;
+  register: (data: RegisterRequest) => Promise<AuthResponse>;
   logout: () => void;
 }
 
@@ -46,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkAuth();
   }, []);
 
-  const login = async (data: LoginRequest) => {
+  const login = async (data: LoginRequest): Promise<AuthResponse> => {
     const response = await authApi.login(data);
     setAuthState({
       user: response.user,
@@ -56,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return response;
   };
 
-  const register = async (data: RegisterRequest) => {
+  const register = async (data: RegisterRequest): Promise<AuthResponse> => {
     const response = await authApi.register(data);
     setAuthState({
       user: response.user,
