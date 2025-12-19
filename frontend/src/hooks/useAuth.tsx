@@ -1,18 +1,12 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authApi, User, LoginRequest, RegisterRequest } from '../lib/api';
+import { authApi, User, LoginRequest, RegisterRequest, AuthResponse } from '../lib/api';
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-}
-
-interface AuthResponse {
-  user: User;
-  accessToken: string;
-  refreshToken: string;
 }
 
 interface AuthContextType extends AuthState {
