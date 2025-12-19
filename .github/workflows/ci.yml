@@ -9,6 +9,6 @@ jobs:
     name: Frontend CI
     uses: ./.github/workflows/frontend.yml
   
-  trigger-services:
-    name: Services CI
-    uses: ./.github/workflows/services.yml
+  # trigger-services:
+  #   name: Services CI
+  #   uses: ./.github/workflows/services.yml
