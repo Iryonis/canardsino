@@ -1,5 +1,3 @@
-version: '3.8'
-
 # ==============================================
 # DEVELOPMENT ENVIRONMENT
 # Hot reload, volumes montés, ports exposés
@@ -38,7 +36,7 @@ services:
       dockerfile: Dockerfile.dev
     container_name: coincoincasino-frontend-dev
     ports:
-      - "3000:3000"  # Exposé pour accès direct si besoin
+      - "3000:3000" # Exposé pour accès direct si besoin
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://localhost
@@ -56,7 +54,7 @@ services:
   # ==============================================
   # MICROSERVICES - DEV MODE
   # ==============================================
-  
+
   # Auth Service
   auth:
     build:
@@ -64,7 +62,7 @@ services:
       dockerfile: Dockerfile.dev
     container_name: coincoincasino-auth-dev
     ports:
-      - "8001:8001"  # Exposé pour test direct
+      - "8001:8001" # Exposé pour test direct
     environment:
       - NODE_ENV=development
       - PORT=8001
@@ -159,8 +157,8 @@ services:
       - PORT=8004
       - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017?authSource=admin
       - MONGO_DB_NAME=chat_db
-      - JWT_SECRET=${JWT_SECRET}             
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}  
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - REDIS_URL=redis://redis:6379
     volumes:
@@ -276,7 +274,7 @@ services:
   # ==============================================
   # DATABASES & MESSAGE QUEUE
   # ==============================================
-  
+
   mongodb:
     image: mongo:7
     container_name: coincoincasino-mongodb-dev
