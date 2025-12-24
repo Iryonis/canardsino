@@ -16,13 +16,11 @@ const redNumbers = [
 interface RouletteWheelProps {
   winningNumber: number | null;
   isSpinning: boolean;
-  onSpinEnd: () => void;
 }
 
 export default function RouletteWheel({
   winningNumber,
   isSpinning,
-  onSpinEnd,
 }: RouletteWheelProps) {
   const [rotation, setRotation] = useState(0);
   const [displayNumber, setDisplayNumber] = useState<number | null>(null);
@@ -56,12 +54,11 @@ export default function RouletteWheel({
 
       const timer = setTimeout(() => {
         setDisplayNumber(winningNumber);
-        onSpinEnd();
       }, 5000);
 
       return () => clearTimeout(timer);
     }
-  }, [isSpinning, winningNumber, onSpinEnd]);
+  }, [isSpinning, winningNumber]);
 
   const getNumberColor = (num: number) => {
     if (num === 0) return "bg-green-600";

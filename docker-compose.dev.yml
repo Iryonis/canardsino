@@ -40,6 +40,8 @@ services:
     environment:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://localhost
+      - NEXT_PUBLIC_GAME_ENGINE_URL=http://localhost/api/roulette
+      - NEXT_PUBLIC_WALLET_URL=http://localhost/api/wallet
     volumes:
       - ./frontend/src:/app/src:cached
       - ./frontend/public:/app/public:cached
@@ -127,9 +129,11 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=8003
+      - JWT_SECRET=${JWT_SECRET}
+      - RANDOM_ORG_SERVICE=http://random-org:8008
+      - WALLET_SERVICE=http://wallet:8005
       - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
       - MONGO_DB_NAME=casino_games
-      - RANDOM_ORG_API_KEY=${RANDOM_ORG_API_KEY}
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - REDIS_URL=redis://redis:6379
     volumes:
@@ -140,6 +144,8 @@ services:
       - mongodb
       - rabbitmq
       - redis
+      - random-org
+      - wallet
     networks:
       - casino-network
     command: npm run dev

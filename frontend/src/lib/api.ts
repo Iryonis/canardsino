@@ -1,14 +1,12 @@
 // API client for CoinCoin Casino
 
-import { AuthError, NetworkError, NotFoundError, ServerError, ValidationError, ApiError } from './apiErrors';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost";
 
 export interface User {
   id: string;
   email: string;
   username: string;
-  createdAt: Date;
+  createdAt?: Date;
 }
 
 export interface AuthTokens {
@@ -18,7 +16,9 @@ export interface AuthTokens {
 
 export interface AuthResponse {
   user: User;
-  tokens: AuthTokens;
+  token: string;
+  refreshToken: string;
+  tokens?: AuthTokens;
 }
 
 export interface LoginRequest {
@@ -35,25 +35,27 @@ export interface RegisterRequest {
 // Token management
 export const tokenStorage = {
   getAccessToken: (): string | null => {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('accessToken');
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("auth_token");
   },
 
   getRefreshToken: (): string | null => {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('refreshToken');
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("refresh_token");
   },
 
-  setTokens: (tokens: AuthTokens): void => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('accessToken', tokens.accessToken);
-    localStorage.setItem('refreshToken', tokens.refreshToken);
+  setTokens: (accessToken: string, refreshToken?: string): void => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("auth_token", accessToken);
+    if (refreshToken) {
+      localStorage.setItem("refresh_token", refreshToken);
+    }
   },
 
   clearTokens: (): void => {
-    if (typeof window === 'undefined') return;
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    if (typeof window === "undefined") return;
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("refresh_token");
   },
 };
 
@@ -65,80 +67,76 @@ async function fetchApi<T>(
   const url = `${API_URL}${endpoint}`;
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
 
   const token = tokenStorage.getAccessToken();
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-      
-      // Throw specific error types based on status code
-      switch (response.status) {
-        case 401:
-          throw new AuthError(error.error || 'Authentication failed');
-        case 400:
-        case 422:
-          throw new ValidationError(error.error || 'Validation failed');
-        case 404:
-          throw new NotFoundError(error.error || 'Resource not found');
-        case 500:
-        case 502:
-        case 503:
-          throw new ServerError(error.error || 'Server error');
-        default:
-          throw new ApiError(
-            error.error || 'Request failed',
-            response.status,
-            `HTTP_${response.status}`
-          );
-      }
-    }
-
-    return response.json();
-  } catch (err) {
-    // Re-throw if it's already one of our custom errors
-    if (err instanceof ApiError) {
-      throw err;
-    }
-    
-    // Otherwise it's a network error
-    throw new NetworkError(err instanceof Error ? err.message : 'Network error occurred');
+  if (!response.ok) {
+    const error = await response
+      .json()
+      .catch(() => ({ error: "Unknown error" }));
+    throw new Error(error.error || error.message || `HTTP ${response.status}`);
   }
+
+  return response.json();
 }
 
 // Auth API methods
 export const authApi = {
   register: async (data: RegisterRequest): Promise<AuthResponse> => {
-    const response = await fetchApi<AuthResponse>('/api/auth/register', {
-      method: 'POST',
+    const response = await fetchApi<AuthResponse>("/api/auth/register", {
+      method: "POST",
       body: JSON.stringify(data),
     });
-    tokenStorage.setTokens(response.tokens);
+
+    const token = response.token || response.tokens?.accessToken;
+    const refreshToken = response.refreshToken || response.tokens?.refreshToken;
+
+    if (token) {
+      tokenStorage.setTokens(token, refreshToken);
+    }
+
     return response;
   },
 
   login: async (data: LoginRequest): Promise<AuthResponse> => {
-    const response = await fetchApi<AuthResponse>('/api/auth/login', {
-      method: 'POST',
+    const response = await fetchApi<AuthResponse>("/api/auth/login", {
+      method: "POST",
       body: JSON.stringify(data),
     });
-    tokenStorage.setTokens(response.tokens);
+
+    const token = response.token || response.tokens?.accessToken;
+    const refreshToken = response.refreshToken || response.tokens?.refreshToken;
+
+    if (token) {
+      tokenStorage.setTokens(token, refreshToken);
+    }
+
     return response;
   },
 
-  getProfile: async (): Promise<User> => {
-    return fetchApi<User>('/api/auth/profile');
+  getProfile: async (): Promise<User | null> => {
+    const token = tokenStorage.getAccessToken();
+    if (!token) {
+      return null;
+    }
+
+    try {
+      return await fetchApi<User>("/api/auth/profile");
+    } catch (error) {
+      tokenStorage.clearTokens();
+      return null;
+    }
   },
 
   logout: (): void => {

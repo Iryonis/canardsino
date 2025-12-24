@@ -1,7 +1,20 @@
-'use client';
+"use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authApi, User, LoginRequest, RegisterRequest, AuthResponse } from '../lib/api';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+import {
+  authApi,
+  User,
+  LoginRequest,
+  RegisterRequest,
+  AuthResponse,
+  tokenStorage,
+} from "../lib/api";
 
 interface AuthState {
   user: User | null;
@@ -18,28 +31,35 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [authState, setAuthState] = useState<AuthState>({
-    user: null,
-    isAuthenticated: false,
-    isLoading: true,
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is authenticated on mount
     const checkAuth = async () => {
+      const token = tokenStorage.getAccessToken();
+
+      if (!token) {
+        setIsAuthenticated(false);
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const user = await authApi.getProfile();
-        setAuthState({
-          user,
-          isAuthenticated: true,
-          isLoading: false,
-        });
+        const profile = await authApi.getProfile();
+        if (profile) {
+          setUser(profile);
+          setIsAuthenticated(true);
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
+        }
       } catch (error) {
-        setAuthState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-        });
+        console.error("Auth check failed:", error);
+        setUser(null);
+        setIsAuthenticated(false);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -48,35 +68,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (data: LoginRequest): Promise<AuthResponse> => {
     const response = await authApi.login(data);
-    setAuthState({
-      user: response.user,
-      isAuthenticated: true,
-      isLoading: false,
-    });
+    setUser(response.user);
+    setIsAuthenticated(true);
     return response;
   };
 
   const register = async (data: RegisterRequest): Promise<AuthResponse> => {
     const response = await authApi.register(data);
-    setAuthState({
-      user: response.user,
-      isAuthenticated: true,
-      isLoading: false,
-    });
+    setUser(response.user);
+    setIsAuthenticated(true);
     return response;
   };
 
   const logout = () => {
     authApi.logout();
-    setAuthState({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-    });
+    setUser(null);
+    setIsAuthenticated(false);
   };
 
   return (
-    <AuthContext.Provider value={{ ...authState, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, isAuthenticated, isLoading, login, register, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -85,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }
