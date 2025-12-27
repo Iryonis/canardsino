@@ -1,6 +1,7 @@
 // API client for CoinCoin Casino
 
 import { AuthError, NetworkError, NotFoundError, ServerError, ValidationError, ApiError } from './apiErrors';
+import { tokenManager } from './tokenManager';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost';
 
@@ -32,35 +33,19 @@ export interface RegisterRequest {
   password: string;
 }
 
-// Token management
+// Legacy token storage API (delegates to tokenManager)
 export const tokenStorage = {
-  getAccessToken: (): string | null => {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('accessToken');
-  },
-
-  getRefreshToken: (): string | null => {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('refreshToken');
-  },
-
-  setTokens: (tokens: AuthTokens): void => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem('accessToken', tokens.accessToken);
-    localStorage.setItem('refreshToken', tokens.refreshToken);
-  },
-
-  clearTokens: (): void => {
-    if (typeof window === 'undefined') return;
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-  },
+  getAccessToken: (): string | null => tokenManager.getAccessToken(),
+  getRefreshToken: (): string | null => tokenManager.getRefreshToken(),
+  setTokens: (tokens: AuthTokens): void => tokenManager.setTokens(tokens),
+  clearTokens: (): void => tokenManager.clearTokens(),
 };
 
-// API client
+// API client with automatic token refresh on 401
 async function fetchApi<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  skipAuthRetry = false
 ): Promise<T> {
   const url = `${API_URL}${endpoint}`;
 
@@ -69,7 +54,7 @@ async function fetchApi<T>(
     ...(options.headers as Record<string, string>),
   };
 
-  const token = tokenStorage.getAccessToken();
+  const token = tokenManager.getAccessToken();
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -82,7 +67,18 @@ async function fetchApi<T>(
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-      
+
+      // Handle 401 with automatic token refresh
+      if (response.status === 401 && !skipAuthRetry) {
+        const refreshed = await tokenManager.refreshTokens();
+        if (refreshed) {
+          // Retry the request with new token
+          return fetchApi<T>(endpoint, options, true);
+        }
+        // Refresh failed, throw auth error
+        throw new AuthError(error.error || 'Session expired');
+      }
+
       // Throw specific error types based on status code
       switch (response.status) {
         case 401:
@@ -111,7 +107,7 @@ async function fetchApi<T>(
     if (err instanceof ApiError) {
       throw err;
     }
-    
+
     // Otherwise it's a network error
     throw new NetworkError(err instanceof Error ? err.message : 'Network error occurred');
   }
@@ -124,7 +120,7 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify(data),
     });
-    tokenStorage.setTokens(response.tokens);
+    tokenManager.setTokens(response.tokens);
     return response;
   },
 
@@ -133,7 +129,7 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify(data),
     });
-    tokenStorage.setTokens(response.tokens);
+    tokenManager.setTokens(response.tokens);
     return response;
   },
 
@@ -142,6 +138,6 @@ export const authApi = {
   },
 
   logout: (): void => {
-    tokenStorage.clearTokens();
+    tokenManager.clearTokens();
   },
 };

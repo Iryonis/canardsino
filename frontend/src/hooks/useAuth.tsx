@@ -1,7 +1,8 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { authApi, User, LoginRequest, RegisterRequest, AuthResponse } from '../lib/api';
+import { tokenManager } from '../lib/tokenManager';
 
 interface AuthState {
   user: User | null;
@@ -24,7 +25,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: true,
   });
 
+  const logout = useCallback(() => {
+    authApi.logout();
+    setAuthState({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+    });
+  }, []);
+
   useEffect(() => {
+    // Initialize token manager with logout callback
+    tokenManager.initialize(logout);
+
     // Check if user is authenticated on mount
     const checkAuth = async () => {
       try {
@@ -34,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isAuthenticated: true,
           isLoading: false,
         });
-      } catch (error) {
+      } catch {
         setAuthState({
           user: null,
           isAuthenticated: false,
@@ -44,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     checkAuth();
-  }, []);
+  }, [logout]);
 
   const login = async (data: LoginRequest): Promise<AuthResponse> => {
     const response = await authApi.login(data);
@@ -64,15 +77,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading: false,
     });
     return response;
-  };
-
-  const logout = () => {
-    authApi.logout();
-    setAuthState({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-    });
   };
 
   return (
