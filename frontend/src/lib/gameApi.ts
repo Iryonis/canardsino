@@ -1,4 +1,8 @@
 // Game Engine API types and functions
+
+/**
+ * Result of a roulette spin containing the winning number and its properties
+ */
 export interface SpinResult {
   winningNumber: number;
   color: "red" | "black" | "green";
@@ -8,6 +12,9 @@ export interface SpinResult {
   dozen?: number;
 }
 
+/**
+ * Complete game result including spin result, bets, and winnings
+ */
 export interface GameResult {
   spinResult: SpinResult;
   bets: any[];
@@ -22,6 +29,9 @@ export interface GameResult {
   source: string;
 }
 
+/**
+ * Response from placing bets
+ */
 export interface PlaceBetsResponse {
   success: boolean;
   userId: string;
@@ -30,15 +40,54 @@ export interface PlaceBetsResponse {
   message: string;
 }
 
+/**
+ * Response from spinning the roulette wheel
+ */
 export interface SpinResponse {
   success: boolean;
   result: GameResult;
 }
 
+/**
+ * Wallet balance information
+ */
 export interface WalletBalance {
   userId: string;
   balance: number;
   currency: string;
+}
+
+/**
+ * Roulette configuration from backend
+ */
+export interface RouletteConfig {
+  redNumbers: number[];
+  blackNumbers: number[];
+  columns: {
+    1: number[];
+    2: number[];
+    3: number[];
+  };
+  dozens: {
+    1: number[];
+    2: number[];
+    3: number[];
+  };
+  payouts: {
+    straight: number;
+    split: number;
+    street: number;
+    corner: number;
+    line: number;
+    column: number;
+    dozen: number;
+    red: number;
+    black: number;
+    even: number;
+    odd: number;
+    low: number;
+    high: number;
+  };
 }
 
 const GAME_ENGINE_URL =
@@ -48,13 +97,19 @@ const WALLET_URL =
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost";
 
-// Récupérer le token depuis le localStorage
+/**
+ * Retrieves authentication token from localStorage
+ * @returns The auth token or null if not found
+ */
 function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("auth_token");
 }
 
-// Headers avec authentification
+/**
+ * Generates headers with authentication token
+ * @returns Headers object with Content-Type and Authorization
+ */
 function getAuthHeaders(): HeadersInit {
   const token = getAuthToken();
   return {
@@ -67,6 +122,9 @@ function getAuthHeaders(): HeadersInit {
 // ROULETTE API
 // ============================================
 
+/**
+ * Simple bet format for frontend-backend communication
+ */
 export interface SimpleBet {
   type:
     | "number"
@@ -82,6 +140,29 @@ export interface SimpleBet {
   amount: number;
 }
 
+/**
+ * Fetches the roulette configuration from the backend
+ * @returns RouletteConfig object containing payouts, red/black numbers, etc.
+ */
+export async function getRouletteConfig(): Promise<RouletteConfig> {
+  const response = await fetch(`${API_URL}/api/games/roulette/config`, {
+    method: "GET",
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to fetch roulette config");
+  }
+
+  return response.json();
+}
+
+/**
+ * Places simple bets for the current user
+ * @param simpleBets - Array of simple bets to place
+ * @returns Response indicating success or failure
+ */
 export async function placeSimpleBets(simpleBets: SimpleBet[]) {
   const response = await fetch(`${API_URL}/api/games/roulette/simple-bets`, {
     method: "POST",
@@ -97,6 +178,10 @@ export async function placeSimpleBets(simpleBets: SimpleBet[]) {
   return response.json();
 }
 
+/**
+ * Spins the roulette wheel with the placed bets
+ * @returns Spin response with game result
+ */
 export async function spinRoulette() {
   const response = await fetch(`${API_URL}/api/games/roulette/spin`, {
     method: "POST",
@@ -111,6 +196,10 @@ export async function spinRoulette() {
   return response.json();
 }
 
+/**
+ * Cancels all pending bets for the current user
+ * @returns Response indicating success or failure
+ */
 export async function cancelRouletteBets() {
   const response = await fetch(`${API_URL}/api/games/roulette/bets`, {
     method: "DELETE",
@@ -129,6 +218,9 @@ export async function cancelRouletteBets() {
 // BET VALIDATION API
 // ============================================
 
+/**
+ * Response from bet validation
+ */
 export interface ValidateBetResponse {
   valid: boolean;
   error?: string;
@@ -137,6 +229,13 @@ export interface ValidateBetResponse {
   message?: string;
 }
 
+/**
+ * Validates a single bet before placing it
+ * @param type - Type of bet (red, black, even, etc.)
+ * @param value - Value of the bet (e.g., column number)
+ * @param amount - Bet amount in coins
+ * @returns Validation response indicating if the bet is valid
+ */
 export async function validateSimpleBet(
   type: string,
   value: string | number,
@@ -156,6 +255,9 @@ export async function validateSimpleBet(
   return response.json();
 }
 
+/**
+ * Response containing potential payout calculations
+ */
 export interface PotentialPayoutResponse {
   valid?: boolean;
   error?: string;
@@ -170,6 +272,11 @@ export interface PotentialPayoutResponse {
   minPotentialWin?: number;
 }
 
+/**
+ * Calculates the potential payout for a list of bets
+ * @param simpleBets - Array of bets to calculate payout for
+ * @returns Potential payout information including max win
+ */
 export async function calculatePotentialPayout(
   simpleBets: SimpleBet[]
 ): Promise<PotentialPayoutResponse> {
@@ -194,6 +301,10 @@ export async function calculatePotentialPayout(
 // WALLET API (via game-engine mock)
 // ============================================
 
+/**
+ * Fetches the wallet balance for the current user
+ * @returns Wallet balance information
+ */
 export async function getWalletBalance(): Promise<WalletBalance> {
   const response = await fetch(`${API_URL}/api/games/roulette/balance`, {
     method: "GET",
@@ -212,6 +323,10 @@ export async function getWalletBalance(): Promise<WalletBalance> {
 // GAMES LIST API
 // ============================================
 
+/**
+ * Fetches the list of available games
+ * @returns Array of available games
+ */
 export async function getAvailableGames() {
   const response = await fetch(`${API_URL}/api/games`, {
     method: "GET",

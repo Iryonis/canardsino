@@ -8,9 +8,13 @@ import {
   getBalance,
   validateSimpleBet,
   calculatePotentialPayout,
+  getRouletteConfig,
 } from "../controllers/rouletteController";
 
 const router = Router();
+
+// Get roulette configuration (payouts, multipliers, etc.)
+router.get("/config", getRouletteConfig);
 
 // Placer des paris
 router.post("/bets", placeBets);

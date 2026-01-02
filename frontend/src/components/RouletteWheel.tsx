@@ -1,23 +1,43 @@
+/**
+ * RouletteWheel component - Animated European roulette wheel
+ * @module RouletteWheel
+ */
+
 "use client";
 
 import { useEffect, useState } from "react";
 
-// Ordre des numéros sur la roulette européenne (sens horaire)
+/**
+ * Order of numbers on European roulette wheel (clockwise)
+ */
 const wheelOrder = [
   0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24,
   16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26,
 ];
 
-// Numéros rouges
+/**
+ * Red numbers in European roulette
+ */
 const redNumbers = [
   1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
 ];
 
+/**
+ * Props for RouletteWheel component
+ */
 interface RouletteWheelProps {
+  /** The winning number to land on (0-36) */
   winningNumber: number | null;
+  /** Whether the wheel is currently spinning */
   isSpinning: boolean;
 }
 
+/**
+ * Animated European roulette wheel component
+ * Spins the wheel and lands on the winning number with realistic animation
+ * @param props - Component props
+ * @returns Roulette wheel UI
+ */
 export default function RouletteWheel({
   winningNumber,
   isSpinning,

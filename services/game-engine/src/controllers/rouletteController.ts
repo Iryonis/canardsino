@@ -1,7 +1,11 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { RouletteLogic } from "../game-logic/RouletteLogic";
-import { Bet, RouletteSession } from "../models/RouletteTypes";
+import {
+  Bet,
+  RouletteSession,
+  EUROPEAN_ROULETTE_CONFIG,
+} from "../models/RouletteTypes";
 
 // In-memory storage for sessions and wallets (mock)
 const sessions = new Map<string, RouletteSession>();
@@ -33,6 +37,26 @@ function getUserIdFromToken(req: Request): string | null {
   } catch (error) {
     console.error("❌ Invalid token:", error);
     return null;
+  }
+}
+
+/**
+ * Get roulette configuration including payouts, red/black numbers, columns, etc.
+ * @route GET /api/roulette/config
+ * @returns Roulette configuration object
+ */
+export async function getRouletteConfig(req: Request, res: Response) {
+  try {
+    res.json({
+      redNumbers: EUROPEAN_ROULETTE_CONFIG.RED_NUMBERS,
+      blackNumbers: EUROPEAN_ROULETTE_CONFIG.BLACK_NUMBERS,
+      columns: EUROPEAN_ROULETTE_CONFIG.COLUMNS,
+      dozens: EUROPEAN_ROULETTE_CONFIG.DOZENS,
+      payouts: EUROPEAN_ROULETTE_CONFIG.PAYOUTS,
+    });
+  } catch (error) {
+    console.error("Error fetching roulette config:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 }
 
@@ -359,7 +383,42 @@ export function validateSimpleBet(req: Request, res: Response) {
 }
 
 /**
+ * Calculate the realistic maximum potential win by simulating all possible outcomes (0-36)
+ * This accounts for mutually exclusive bets (e.g., red and black cannot both win)
+ * @param bets - Array of validated bets
+ * @returns Maximum possible net win across all possible outcomes
+ */
+function calculateRealisticMaxWin(bets: Bet[]): number {
+  let maxNetWin = -Infinity;
+
+  // Simulate each possible outcome (0-36)
+  for (let winningNumber = 0; winningNumber <= 36; winningNumber++) {
+    const spinResult = RouletteLogic.analyzeWinningNumber(winningNumber);
+    let totalPayout = 0;
+
+    // Check which bets win for this outcome
+    for (const bet of bets) {
+      if (RouletteLogic.isBetWinning(bet, spinResult)) {
+        totalPayout += RouletteLogic.calculatePayout(bet);
+      }
+    }
+
+    // Calculate net win for this outcome (payout - total bet amount)
+    const totalBet = bets.reduce((sum, bet) => sum + bet.amount, 0);
+    const netWin = totalPayout - totalBet;
+
+    // Track the maximum net win
+    if (netWin > maxNetWin) {
+      maxNetWin = netWin;
+    }
+  }
+
+  return maxNetWin;
+}
+
+/**
  * Calculate total potential payout for a list of bets
+ * Simulates all possible outcomes to find the realistic maximum win
  * @param req - Express request containing simpleBets array
  * @param res - Express response
  */
@@ -387,6 +446,7 @@ export function calculatePotentialPayout(req: Request, res: Response) {
       payout: number;
       netWin: number;
     }> = [];
+    const validatedBets: Bet[] = [];
 
     // Convert and calculate payout for each bet
     for (const simpleBet of simpleBets) {
@@ -423,6 +483,8 @@ export function calculatePotentialPayout(req: Request, res: Response) {
           payout,
           netWin,
         });
+
+        validatedBets.push(bet);
       } catch (error) {
         return res.status(400).json({
           error: error instanceof Error ? error.message : "Invalid bet in list",
@@ -430,9 +492,8 @@ export function calculatePotentialPayout(req: Request, res: Response) {
       }
     }
 
-    // Calculate maximum potential win (if all bets win)
-    const maxPotentialWin =
-      potentialPayouts.reduce((sum, p) => sum + p.payout, 0) - totalBet;
+    // Calculate realistic maximum potential win by simulating all outcomes
+    const maxPotentialWin = calculateRealisticMaxWin(validatedBets);
 
     // Calculate minimum potential win (if all bets lose)
     const minPotentialWin = -totalBet;

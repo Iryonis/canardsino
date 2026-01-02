@@ -122,18 +122,19 @@ export class RouletteLogic {
   }
 
   /**
-   * Calculates the total payout for a winning bet (original stake + winnings)
+   * Calculates the total payout for a winning bet (includes original stake)
+   * The payout multiplier already includes the original bet (e.g., 36x for straight = 35:1 + original bet)
    *
    * @param {Bet} bet - The winning bet
    * @returns {number} Total payout amount (stake + winnings)
    *
    * @example
    * const bet = { type: 'straight', numbers: [17], amount: 10 };
-   * RouletteLogic.calculatePayout(bet); // Returns: 360 (10 + 10*35)
+   * RouletteLogic.calculatePayout(bet); // Returns: 360 (10 * 36, which is 35:1 + original 10)
    */
   static calculatePayout(bet: Bet): number {
     const multiplier = EUROPEAN_ROULETTE_CONFIG.PAYOUTS[bet.type];
-    return bet.amount + bet.amount * multiplier;
+    return bet.amount * multiplier;
   }
 
   /**
