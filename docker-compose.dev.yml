@@ -128,12 +128,12 @@ services:
       - "8003:8003"
     environment:
       - NODE_ENV=development
-      - PORT=8003
+      - GAME_PORT=8003
       - JWT_SECRET=${JWT_SECRET}
       - RANDOM_ORG_SERVICE=http://random-org:8008
       - WALLET_SERVICE=http://wallet:8005
-      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
-      - MONGO_DB_NAME=casino_games
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017?authSource=admin
+      - DB_NAME_GAME_ENGINE=game_engine_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - REDIS_URL=redis://redis:6379
     volumes:
@@ -160,7 +160,7 @@ services:
       - "8004:8004"
     environment:
       - NODE_ENV=development
-      - PORT=8004
+      - CHAT_PORT=8004
       - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017?authSource=admin
       - MONGO_DB_NAME=chat_db
       - JWT_SECRET=${JWT_SECRET}

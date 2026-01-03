@@ -1,25 +1,30 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import { v4 as uuidv4 } from "uuid";
 import { RouletteLogic } from "../game-logic/RouletteLogic";
 import {
   Bet,
   RouletteSession,
   EUROPEAN_ROULETTE_CONFIG,
 } from "../models/RouletteTypes";
+import { GameSession, GameHistory, BigWin } from "../models";
 
 // In-memory storage for sessions and wallets (mock)
 const sessions = new Map<string, RouletteSession>();
 const wallets = new Map<string, number>();
 
 /**
- * Extract userId from JWT token in request headers
+ * Minimum multiplier to be considered a "big win" (e.g., x10 means winning 10 times the bet)
  */
-function getUserIdFromToken(req: Request): string | null {
+const BIG_WIN_MULTIPLIER = 10;
+
+/**
+ * Extract user info from JWT token in request headers
+ */
+function getUserFromToken(
+  req: Request
+): { userId: string; username: string } | null {
   const authHeader = req.headers.authorization;
-  console.log(
-    "🔍 Auth header:",
-    authHeader ? authHeader.substring(0, 30) + "..." : "NO AUTH HEADER"
-  );
 
   if (!authHeader?.startsWith("Bearer ")) {
     console.log("❌ No Bearer token found");
@@ -32,12 +37,22 @@ function getUserIdFromToken(req: Request): string | null {
       token,
       process.env.JWT_SECRET || "your-secret-key"
     ) as any;
-    console.log("✅ Token decoded, userId:", decoded.userId);
-    return decoded.userId || decoded.sub || decoded.id;
+    const userId = decoded.userId || decoded.sub || decoded.id;
+    const username = decoded.username || `Player_${userId.substring(0, 8)}`;
+    console.log("✅ Token decoded, username:", username);
+    return { userId, username };
   } catch (error) {
     console.error("❌ Invalid token:", error);
     return null;
   }
+}
+
+/**
+ * Extract userId from JWT token (backward compatibility)
+ */
+function getUserIdFromToken(req: Request): string | null {
+  const user = getUserFromToken(req);
+  return user ? user.userId : null;
 }
 
 /**
@@ -67,10 +82,14 @@ export async function getRouletteConfig(req: Request, res: Response) {
  */
 export async function placeBets(req: Request, res: Response) {
   try {
-    const userId = getUserIdFromToken(req);
-    if (!userId) {
-      return res.status(401).json({ error: "Unauthorized - Invalid token" });
+    const user = getUserFromToken(req);
+
+    if (!user) {
+      res.status(401).json({ error: "Unauthorized - Invalid token" });
+      return;
     }
+
+    const { userId, username } = user;
 
     const { bets } = req.body;
 
@@ -130,10 +149,14 @@ export async function placeBets(req: Request, res: Response) {
  */
 export async function spin(req: Request, res: Response) {
   try {
-    const userId = getUserIdFromToken(req);
-    if (!userId) {
-      return res.status(401).json({ error: "Unauthorized - Invalid token" });
+    const user = getUserFromToken(req);
+
+    if (!user) {
+      res.status(401).json({ error: "Unauthorized - Invalid token" });
+      return;
     }
+
+    const { userId, username } = user;
 
     // Retrieve session
     const session = sessions.get(userId);
@@ -142,8 +165,13 @@ export async function spin(req: Request, res: Response) {
         .status(400)
         .json({ error: "No bets placed. Place bets first." });
     }
-
-    // Get random number (0-36)
+    //
+    //
+    //
+    // SHOULD USE RANDOM.ORG OR OTHER SERVICE IN PRODUCTION
+    //
+    //
+    //
     const winningNumber = Math.floor(Math.random() * 37);
     const source = "mock-random";
 
@@ -162,6 +190,13 @@ export async function spin(req: Request, res: Response) {
     // Clear session
     sessions.delete(userId);
 
+    // Save to database (async, don't block response)
+    saveGameToDatabase(userId, username, gameResult, session.bets).catch(
+      (error) => {
+        console.error("❌ Failed to save game to database:", error);
+      }
+    );
+
     // Return result
     res.json({
       success: true,
@@ -170,6 +205,154 @@ export async function spin(req: Request, res: Response) {
   } catch (error) {
     console.error("Error spinning wheel:", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/**
+ * Save game result to database (async)
+ * Creates GameHistory entry, updates GameSession, and saves BigWin if applicable
+ */
+async function saveGameToDatabase(
+  userId: string,
+  username: string,
+  gameResult: any,
+  bets: Bet[]
+): Promise<void> {
+  try {
+    // Generate or get session ID (for now, create new session per game)
+    const sessionId = uuidv4();
+
+    // Create GameHistory entry
+    const gameBets = bets.map((bet, index) => {
+      const winningBet = gameResult.winningBets.find(
+        (wb: any) => JSON.stringify(wb.bet) === JSON.stringify(bet)
+      );
+
+      return {
+        betType: bet.type,
+        numbers: bet.numbers,
+        amount: bet.amount,
+        payout: winningBet ? winningBet.payout : 0,
+        won: !!winningBet,
+        multiplier: EUROPEAN_ROULETTE_CONFIG.PAYOUTS[bet.type],
+      };
+    });
+
+    const gameHistory = new GameHistory({
+      userId,
+      sessionId,
+      gameType: "roulette",
+      bets: gameBets,
+      totalBet: gameResult.totalBet,
+      totalWin: gameResult.totalWin,
+      netResult: gameResult.netResult,
+      rouletteDetails: {
+        winningNumber: gameResult.spinResult.winningNumber,
+        color: gameResult.spinResult.color,
+        parity: gameResult.spinResult.parity,
+        range: gameResult.spinResult.range,
+        column: gameResult.spinResult.column,
+        dozen: gameResult.spinResult.dozen,
+        randomSource: gameResult.source,
+      },
+    });
+
+    await gameHistory.save();
+
+    // Create or update GameSession
+    let gameSession = await GameSession.findOne({ sessionId });
+
+    if (!gameSession) {
+      gameSession = new GameSession({
+        sessionId,
+        gameType: "roulette",
+        sessionType: "single",
+        status: "completed",
+        players: [
+          {
+            userId,
+            username, // Username from JWT token
+            joinedAt: new Date(),
+            totalBet: gameResult.totalBet,
+            totalWin: gameResult.totalWin,
+            netResult: gameResult.netResult,
+          },
+        ],
+        hostUserId: userId,
+        totalRounds: 1,
+        totalBets: gameResult.totalBet,
+        totalWins: gameResult.totalWin,
+        startedAt: new Date(),
+        endedAt: new Date(),
+      });
+    } else {
+      // Update existing session
+      gameSession.totalRounds += 1;
+      gameSession.totalBets += gameResult.totalBet;
+      gameSession.totalWins += gameResult.totalWin;
+      gameSession.players[0].totalBet += gameResult.totalBet;
+      gameSession.players[0].totalWin += gameResult.totalWin;
+      gameSession.players[0].netResult += gameResult.netResult;
+    }
+
+    await gameSession.save();
+
+    // Check if this is a big win (based on multiplier)
+    const actualMultiplier =
+      gameResult.totalBet > 0 ? gameResult.totalWin / gameResult.totalBet : 0;
+
+    if (actualMultiplier >= BIG_WIN_MULTIPLIER) {
+      // Find the winning bet with highest payout
+      const biggestWinningBet = gameResult.winningBets.reduce(
+        (max: any, wb: any) => (wb.payout > max.payout ? wb : max),
+        gameResult.winningBets[0]
+      );
+
+      const bigWin = new BigWin({
+        userId,
+        username, // Username from JWT token
+        gameType: "roulette",
+        betType: biggestWinningBet.bet.type,
+        betAmount: gameResult.totalBet,
+        winAmount: gameResult.netResult,
+        multiplier: actualMultiplier,
+        isPublic: true,
+      });
+
+      await bigWin.save();
+
+      // Notify chat service about the big win
+      try {
+        const chatServiceUrl =
+          process.env.CHAT_SERVICE_URL || "http://chat:8004";
+        const message = `${bigWin.username} just won ${
+          bigWin.winAmount
+        } coins with a x${bigWin.multiplier.toFixed(
+          2
+        )} in the game European Roulette!`;
+
+        const response = await fetch(`${chatServiceUrl}/system-message`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ message }),
+        });
+
+        if (response.ok) {
+          console.log("✅ Big win notification sent to chat");
+        } else {
+          console.error(
+            `❌ Failed to send big win to chat: ${response.status} ${response.statusText}`
+          );
+        }
+      } catch (error) {
+        console.error("❌ Error sending big win notification to chat:", error);
+      }
+    }
+  } catch (error) {
+    console.error("Error saving game to database:", error);
+    throw error;
   }
 }
 
@@ -506,6 +689,105 @@ export function calculatePotentialPayout(req: Request, res: Response) {
     });
   } catch (error) {
     console.error("Error calculating potential payout:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/**
+ * Fetch user's game history with pagination
+ *
+ * @route GET /api/games/roulette/history
+ * @param {Request} req - The Express request
+ * @param {Response} res - The Express response
+ * @query {number} [page=1] -  Page number for pagination
+ * @query {number} [limit=20] - Number of items per page (max 100)
+ * @returns {Promise<void>} - Returns the game history with pagination
+ */
+export async function getUserGameHistory(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const userId = getUserIdFromToken(req);
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized - Invalid token" });
+      return;
+    }
+
+    // Pagination parameters
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(req.query.limit as string) || 20)
+    );
+    const skip = (page - 1) * limit;
+
+    // Query game history sorted by most recent first
+    const [history, totalCount] = await Promise.all([
+      GameHistory.find({ userId })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      GameHistory.countDocuments({ userId }),
+    ]);
+
+    const totalPages = Math.ceil(totalCount / limit);
+
+    res.json({
+      history,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching user game history:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/**
+ * Fetch recent big wins (public only).
+ *
+ * @route GET /api/games/roulette/big-wins
+ * @param {Request} req - The Express request
+ * @param {Response} res - The Express response
+ * @query {string} [gameType] - Optional game type filter (e.g., 'roulette')
+ * @query {number} [limit=50] - Number of results (max 100)
+ * @returns {Promise<void>} - Returns the recent big wins (public only)
+ */
+export async function getBigWins(req: Request, res: Response): Promise<void> {
+  try {
+    const gameType = req.query.gameType as string | undefined;
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(req.query.limit as string) || 50)
+    );
+
+    // Build query
+    const query: any = { isPublic: true };
+    if (gameType) {
+      query.gameType = gameType;
+    }
+
+    // Fetch recent big wins sorted by creation date
+    const bigWins = await BigWin.find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    res.json({
+      bigWins,
+      count: bigWins.length,
+    });
+  } catch (error) {
+    console.error("Error fetching big wins:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 }

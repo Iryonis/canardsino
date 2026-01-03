@@ -24,7 +24,9 @@ import {
   getWalletBalance,
   calculatePotentialPayout,
   getRouletteConfig,
+  getUserGameHistory,
   type RouletteConfig,
+  type GameHistoryEntry,
 } from "@/lib/gameApi";
 
 /**
@@ -62,7 +64,7 @@ export default function RoulettePage() {
   // Game state
   const [balance, setBalance] = useState(0);
   const [result, setResult] = useState<string>("Place at least one bet");
-  const [history, setHistory] = useState<number[]>([]);
+  const [history, setHistory] = useState<GameHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [betError, setBetError] = useState<string>("");
@@ -77,7 +79,21 @@ export default function RoulettePage() {
   useEffect(() => {
     loadConfig();
     loadBalance();
+    loadHistory();
   }, []);
+
+  /**
+   * Loads the user's game history from the database
+   */
+  const loadHistory = async () => {
+    try {
+      const response = await getUserGameHistory(1, 10);
+      setHistory(response.history);
+    } catch (error) {
+      console.error("Failed to load game history:", error);
+      // Don't show error to user, just fail silently
+    }
+  };
 
   /**
    * Fetches roulette configuration from backend
@@ -184,7 +200,8 @@ export default function RoulettePage() {
 
     const { spinResult, netResult } = gameResult;
 
-    setHistory([spinResult.winningNumber, ...history.slice(0, 9)]);
+    // Reload history from database instead of updating locally
+    await loadHistory();
     await loadBalance();
 
     if (netResult > 0) {
@@ -472,7 +489,12 @@ export default function RoulettePage() {
 
           <div className="absolute top-4 right-4 text-center">
             <GameResult result={result} error={error} />
-            <GameHistory history={history} redNumbers={config.redNumbers} />
+            <GameHistory
+              history={history.map(
+                (entry) => entry.rouletteDetails.winningNumber
+              )}
+              redNumbers={config.redNumbers}
+            />
           </div>
         </div>
 

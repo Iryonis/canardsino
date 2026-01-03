@@ -90,10 +90,52 @@ export interface RouletteConfig {
   };
 }
 
-const GAME_ENGINE_URL =
-  process.env.NEXT_PUBLIC_GAME_ENGINE_URL || "http://localhost:8003/roulette";
-const WALLET_URL =
-  process.env.NEXT_PUBLIC_WALLET_URL || "http://localhost:8002/wallet";
+/**
+ * Game history entry from database
+ */
+export interface GameHistoryEntry {
+  _id: string;
+  userId: string;
+  sessionId: string;
+  gameType: string;
+  bets: Array<{
+    betType: string;
+    numbers: number[];
+    amount: number;
+    payout: number;
+    won: boolean;
+    multiplier: number;
+  }>;
+  totalBet: number;
+  totalWin: number;
+  netResult: number;
+  rouletteDetails: {
+    winningNumber: number;
+    color: string;
+    parity: string;
+    range: string;
+    column?: number;
+    dozen?: number;
+    randomSource: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Paginated game history response
+ */
+export interface GameHistoryResponse {
+  history: GameHistoryEntry[];
+  pagination: {
+    page: number;
+    limit: number;
+    totalCount: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+}
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost";
 
@@ -292,6 +334,45 @@ export async function calculatePotentialPayout(
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || "Failed to calculate potential payout");
+  }
+
+  return response.json();
+}
+
+/**
+ * Gets the user's game history from the database
+ * @param page - Page number (default: 1)
+ * @param limit - Items per page (default: 20)
+ * @returns Paginated game history
+ */
+export async function getUserGameHistory(
+  page: number = 1,
+  limit: number = 20
+): Promise<GameHistoryResponse> {
+  const response = await fetch(
+    `${API_URL}/api/games/roulette/history?page=${page}&limit=${limit}`,
+    {
+      method: "GET",
+      headers: getAuthHeaders(),
+    }
+  );
+
+  if (!response.ok) {
+    // Read body as text first, then try to parse as JSON
+    let errorMessage = "Failed to get game history";
+    try {
+      const text = await response.text();
+      try {
+        const error = JSON.parse(text);
+        errorMessage = error.error || errorMessage;
+      } catch {
+        console.error("Non-JSON response:", text.substring(0, 200));
+        errorMessage = `Server error: ${response.status}`;
+      }
+    } catch {
+      errorMessage = `Server error: ${response.status}`;
+    }
+    throw new Error(errorMessage);
   }
 
   return response.json();
