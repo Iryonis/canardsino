@@ -59,6 +59,8 @@ export default function RouletteWheel({
       // Random full rotations
       const fullRotations = 5 + Math.floor(Math.random() * 3);
 
+      // Calculate the new rotation value
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRotation((prev) => {
         // Normalize current angle
         const currentAngle = prev % 360;
@@ -70,6 +72,7 @@ export default function RouletteWheel({
         return prev + fullRotations * 360 + deltaToTarget;
       });
 
+      // Reset display number separately
       setDisplayNumber(null);
 
       const timer = setTimeout(() => {

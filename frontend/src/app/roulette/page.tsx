@@ -27,7 +27,10 @@ import {
   getUserGameHistory,
   type RouletteConfig,
   type GameHistoryEntry,
+  type SimpleBet,
+  type GameResult as GameResultType,
 } from "@/lib/gameApi";
+import { Navbar } from "@/components/navbar/navbar";
 
 /**
  * Bet type for roulette bets
@@ -74,15 +77,6 @@ export default function RoulettePage() {
   const [config, setConfig] = useState<RouletteConfig | null>(null);
 
   /**
-   * Load roulette configuration and balance on component mount
-   */
-  useEffect(() => {
-    loadConfig();
-    loadBalance();
-    loadHistory();
-  }, []);
-
-  /**
    * Loads the user's game history from the database
    */
   const loadHistory = async () => {
@@ -111,9 +105,6 @@ export default function RoulettePage() {
   /**
    * Fetches user wallet balance
    */
-  /**
-   * Fetches user wallet balance
-   */
   const loadBalance = async () => {
     try {
       const walletData = await getWalletBalance();
@@ -123,6 +114,16 @@ export default function RoulettePage() {
       setError("Error loading balance");
     }
   };
+
+  /**
+   * Load roulette configuration and balance on component mount
+   */
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadConfig();
+    loadBalance();
+    loadHistory();
+  }, []);
 
   /**
    * Handles the spin button click, places bets and spins the wheel
@@ -167,7 +168,7 @@ export default function RoulettePage() {
         };
       });
 
-      await placeSimpleBets(simpleBets as any);
+      await placeSimpleBets(simpleBets as SimpleBet[]);
       const spinResponse = await spinRoulette();
       const gameResult = spinResponse.result;
 
@@ -190,11 +191,7 @@ export default function RoulettePage() {
    * Handles the completion of a spin animation and displays results
    * @param gameResult - The result from the game engine
    */
-  /**
-   * Handles the completion of a spin animation and displays results
-   * @param gameResult - The result from the game engine
-   */
-  const handleSpinComplete = async (gameResult: any) => {
+  const handleSpinComplete = async (gameResult: GameResultType) => {
     setMustSpin(false);
     setLoading(false);
 
@@ -352,7 +349,9 @@ export default function RoulettePage() {
           ? { type: bet.type, value: bet.numbers[0], amount: bet.amount }
           : { type: bet.type, numbers: bet.numbers, amount: bet.amount };
 
-      const validation = await calculatePotentialPayout([simpleBet] as any);
+      const validation = await calculatePotentialPayout([
+        simpleBet,
+      ] as SimpleBet[]);
 
       // Check if validation failed (valid: false)
       if (validation.valid === false) {
@@ -397,7 +396,9 @@ export default function RoulettePage() {
           : { type: bet.type, numbers: bet.numbers, amount: bet.amount }
       );
 
-      const payoutData = await calculatePotentialPayout(simpleBets as any);
+      const payoutData = await calculatePotentialPayout(
+        simpleBets as SimpleBet[]
+      );
 
       // If validation fails, don't update potential win
       if (payoutData.valid === false) {
@@ -444,22 +445,7 @@ export default function RoulettePage() {
   return (
     <div className="min-h-screen bg-blue-darkest">
       {/* Header */}
-      <nav className="bg-blue-dark/50 backdrop-blur border-b border-blue">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div>
-            <a
-              href="/"
-              className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-light to-blue-lightest"
-            >
-              🎰 CoinCoin Casino
-            </a>
-            <span className="ml-4 text-blue-light">- European Roulette</span>
-          </div>
-          <div className="text-blue-lightest font-bold text-xl">
-            💰 Balance: {balance} coins
-          </div>
-        </div>
-      </nav>
+      <Navbar balance={balance} currentPage="European Roulette" />
 
       <div className="container mx-auto px-4 py-8">
         {/* Wheel at the top */}

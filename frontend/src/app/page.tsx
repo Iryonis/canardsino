@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useAuth } from "../hooks/useAuth";
+import { Navbar } from "../components/navbar/navbar";
 
 export default function Home() {
-  const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -17,43 +18,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-blue-darkest">
       {/* Header/Navbar */}
-      <nav className="bg-blue-dark/50 backdrop-blur border-b border-blue">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-light to-blue-lightest">
-            🎰 CoinCoin Casino
-          </h1>
-          <div className="flex items-center gap-4">
-            {isAuthenticated && user ? (
-              <>
-                <span className="text-blue-light">
-                  Welcome, {user.username}!
-                </span>
-                <button
-                  onClick={logout}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-blue-lightest rounded-lg transition"
-                >
-                  Logout
-                </button>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="px-4 py-2 bg-blue-dark hover:bg-blue text-blue-lightest rounded-lg transition border border-blue"
-                >
-                  Login
-                </Link>
-                <Link
-                  href="/register"
-                  className="px-4 py-2 bg-gradient-to-r from-blue to-blue-light hover:from-blue-light hover:to-blue-lightest text-blue-darkest font-bold rounded-lg transition"
-                >
-                  Register
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </nav>
+      <Navbar balance={0} currentPage="" />
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-16">
@@ -87,7 +52,7 @@ export default function Home() {
                 <div className="flex justify-between">
                   <span className="text-blue-light">Member Since:</span>
                   <span className="text-blue-lightest font-medium">
-                    {new Date(user.createdAt).toLocaleDateString()}
+                    {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
                   </span>
                 </div>
               </div>
@@ -136,7 +101,7 @@ export default function Home() {
               </div>
               <div className="mt-8">
                 <Link
-                  href="/register"
+                  href="/login"
                   className="inline-block px-8 py-4 bg-gradient-to-r from-blue to-blue-light hover:from-blue-light hover:to-blue-lightest text-blue-darkest font-bold text-lg rounded-lg shadow-xl transition"
                 >
                   Get Started Now

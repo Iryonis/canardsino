@@ -1,8 +1,21 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { authApi, User, LoginRequest, RegisterRequest, AuthResponse } from '../lib/api';
-import { tokenManager } from '../lib/tokenManager';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+} from "react";
+import {
+  authApi,
+  User,
+  LoginRequest,
+  RegisterRequest,
+  AuthResponse,
+} from "../lib/api";
+import { tokenManager } from "../lib/tokenManager";
 
 interface AuthState {
   user: User | null;
@@ -19,9 +32,11 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [authState, setAuthState] = useState<AuthState>({
+    user: null,
+    isAuthenticated: false,
+    isLoading: true,
+  });
 
   const logout = useCallback(() => {
     authApi.logout();
@@ -38,14 +53,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Check if user is authenticated on mount
     const checkAuth = async () => {
-      const token = tokenStorage.getAccessToken();
-
-      if (!token) {
-        setIsAuthenticated(false);
-        setIsLoading(false);
-        return;
-      }
-
       try {
         const user = await authApi.getProfile();
         setAuthState({
@@ -67,22 +74,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (data: LoginRequest): Promise<AuthResponse> => {
     const response = await authApi.login(data);
-    setUser(response.user);
-    setIsAuthenticated(true);
+    setAuthState({
+      user: response.user,
+      isAuthenticated: true,
+      isLoading: false,
+    });
     return response;
   };
 
   const register = async (data: RegisterRequest): Promise<AuthResponse> => {
     const response = await authApi.register(data);
-    setUser(response.user);
-    setIsAuthenticated(true);
+    setAuthState({
+      user: response.user,
+      isAuthenticated: true,
+      isLoading: false,
+    });
     return response;
   };
 
   return (
-    <AuthContext.Provider
-      value={{ user, isAuthenticated, isLoading, login, register, logout }}
-    >
+    <AuthContext.Provider value={{ ...authState, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

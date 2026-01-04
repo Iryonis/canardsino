@@ -1,9 +1,16 @@
 // API client for CoinCoin Casino
 
-import { AuthError, NetworkError, NotFoundError, ServerError, ValidationError, ApiError } from './apiErrors';
-import { tokenManager } from './tokenManager';
+import {
+  AuthError,
+  NetworkError,
+  NotFoundError,
+  ServerError,
+  ValidationError,
+  ApiError,
+} from "./apiErrors";
+import { tokenManager } from "./tokenManager";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost";
 
 export interface User {
   id: string;
@@ -68,7 +75,9 @@ async function fetchApi<T>(
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      const error = await response
+        .json()
+        .catch(() => ({ error: "Unknown error" }));
 
       // Handle 401 with automatic token refresh
       if (response.status === 401 && !skipAuthRetry) {
@@ -78,25 +87,25 @@ async function fetchApi<T>(
           return fetchApi<T>(endpoint, options, true);
         }
         // Refresh failed, throw auth error
-        throw new AuthError(error.error || 'Session expired');
+        throw new AuthError(error.error || "Session expired");
       }
 
       // Throw specific error types based on status code
       switch (response.status) {
         case 401:
-          throw new AuthError(error.error || 'Authentication failed');
+          throw new AuthError(error.error || "Authentication failed");
         case 400:
         case 422:
-          throw new ValidationError(error.error || 'Validation failed');
+          throw new ValidationError(error.error || "Validation failed");
         case 404:
-          throw new NotFoundError(error.error || 'Resource not found');
+          throw new NotFoundError(error.error || "Resource not found");
         case 500:
         case 502:
         case 503:
-          throw new ServerError(error.error || 'Server error');
+          throw new ServerError(error.error || "Server error");
         default:
           throw new ApiError(
-            error.error || 'Request failed',
+            error.error || "Request failed",
             response.status,
             `HTTP_${response.status}`
           );
@@ -111,10 +120,10 @@ async function fetchApi<T>(
     }
 
     // Otherwise it's a network error
-    throw new NetworkError(err instanceof Error ? err.message : 'Network error occurred');
+    throw new NetworkError(
+      err instanceof Error ? err.message : "Network error occurred"
+    );
   }
-
-  return response.json();
 }
 
 // Auth API methods
@@ -124,7 +133,7 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify(data),
     });
-    tokenManager.setTokens(response.tokens);
+    tokenManager.setTokens(response.tokens || { accessToken: response.token, refreshToken: response.refreshToken });
     return response;
   },
 
@@ -133,7 +142,7 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify(data),
     });
-    tokenManager.setTokens(response.tokens);
+    tokenManager.setTokens(response.tokens || { accessToken: response.token, refreshToken: response.refreshToken });
     return response;
   },
 
@@ -145,7 +154,7 @@ export const authApi = {
 
     try {
       return await fetchApi<User>("/api/auth/profile");
-    } catch (error) {
+    } catch {
       tokenStorage.clearTokens();
       return null;
     }

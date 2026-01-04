@@ -1,5 +1,7 @@
 // Game Engine API types and functions
 
+import { tokenManager } from "./tokenManager";
+
 /**
  * Result of a roulette spin containing the winning number and its properties
  */
@@ -13,16 +15,26 @@ export interface SpinResult {
 }
 
 /**
+ * Bet placed in a game
+ */
+export interface PlacedBet {
+  type: string;
+  numbers?: number[];
+  value?: string | number;
+  amount: number;
+}
+
+/**
  * Complete game result including spin result, bets, and winnings
  */
 export interface GameResult {
   spinResult: SpinResult;
-  bets: any[];
+  bets: PlacedBet[];
   totalBet: number;
   totalWin: number;
   netResult: number;
   winningBets: Array<{
-    bet: any;
+    bet: PlacedBet;
     payout: number;
   }>;
   timestamp: number;
@@ -35,7 +47,7 @@ export interface GameResult {
 export interface PlaceBetsResponse {
   success: boolean;
   userId: string;
-  bets: any[];
+  bets: PlacedBet[];
   totalAmount: number;
   message: string;
 }
@@ -140,24 +152,58 @@ export interface GameHistoryResponse {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost";
 
 /**
- * Retrieves authentication token from localStorage
- * @returns The auth token or null if not found
- */
-function getAuthToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("auth_token");
-}
-
-/**
  * Generates headers with authentication token
+ * Automatically refreshes token if expired
  * @returns Headers object with Content-Type and Authorization
  */
-function getAuthHeaders(): HeadersInit {
-  const token = getAuthToken();
+async function getAuthHeaders(): Promise<HeadersInit> {
+  // Check if token is valid, if not refresh it
+  if (!tokenManager.isAccessTokenValid()) {
+    await tokenManager.refreshTokens();
+  }
+
+  const token = tokenManager.getAccessToken();
   return {
     "Content-Type": "application/json",
     ...(token && { Authorization: `Bearer ${token}` }),
   };
+}
+
+/**
+ * Wrapper for fetch that handles token refresh on 401 errors
+ */
+async function authenticatedFetch(
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  // Get fresh headers
+  const headers = await getAuthHeaders();
+
+  // First attempt
+  let response = await fetch(url, {
+    ...options,
+    headers: {
+      ...headers,
+      ...options.headers,
+    },
+  });
+
+  // If we get a 401, try refreshing the token and retry once
+  if (response.status === 401) {
+    const refreshed = await tokenManager.refreshTokens();
+    if (refreshed) {
+      const newHeaders = await getAuthHeaders();
+      response = await fetch(url, {
+        ...options,
+        headers: {
+          ...newHeaders,
+          ...options.headers,
+        },
+      });
+    }
+  }
+
+  return response;
 }
 
 // ============================================
@@ -187,10 +233,12 @@ export interface SimpleBet {
  * @returns RouletteConfig object containing payouts, red/black numbers, etc.
  */
 export async function getRouletteConfig(): Promise<RouletteConfig> {
-  const response = await fetch(`${API_URL}/api/games/roulette/config`, {
-    method: "GET",
-    headers: getAuthHeaders(),
-  });
+  const response = await authenticatedFetch(
+    `${API_URL}/api/games/roulette/config`,
+    {
+      method: "GET",
+    }
+  );
 
   if (!response.ok) {
     const error = await response.json();
@@ -206,11 +254,13 @@ export async function getRouletteConfig(): Promise<RouletteConfig> {
  * @returns Response indicating success or failure
  */
 export async function placeSimpleBets(simpleBets: SimpleBet[]) {
-  const response = await fetch(`${API_URL}/api/games/roulette/simple-bets`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ simpleBets }),
-  });
+  const response = await authenticatedFetch(
+    `${API_URL}/api/games/roulette/simple-bets`,
+    {
+      method: "POST",
+      body: JSON.stringify({ simpleBets }),
+    }
+  );
 
   if (!response.ok) {
     const error = await response.json();
@@ -225,10 +275,12 @@ export async function placeSimpleBets(simpleBets: SimpleBet[]) {
  * @returns Spin response with game result
  */
 export async function spinRoulette() {
-  const response = await fetch(`${API_URL}/api/games/roulette/spin`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-  });
+  const response = await authenticatedFetch(
+    `${API_URL}/api/games/roulette/spin`,
+    {
+      method: "POST",
+    }
+  );
 
   if (!response.ok) {
     const error = await response.json();
@@ -243,10 +295,12 @@ export async function spinRoulette() {
  * @returns Response indicating success or failure
  */
 export async function cancelRouletteBets() {
-  const response = await fetch(`${API_URL}/api/games/roulette/bets`, {
-    method: "DELETE",
-    headers: getAuthHeaders(),
-  });
+  const response = await authenticatedFetch(
+    `${API_URL}/api/games/roulette/bets`,
+    {
+      method: "DELETE",
+    }
+  );
 
   if (!response.ok) {
     const error = await response.json();
@@ -266,7 +320,7 @@ export async function cancelRouletteBets() {
 export interface ValidateBetResponse {
   valid: boolean;
   error?: string;
-  bet?: any;
+  bet?: PlacedBet;
   potentialPayout?: number;
   message?: string;
 }
@@ -283,11 +337,13 @@ export async function validateSimpleBet(
   value: string | number,
   amount: number[]
 ): Promise<ValidateBetResponse> {
-  const response = await fetch(`${API_URL}/api/games/roulette/validate-bet`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ type, value, amount }),
-  });
+  const response = await authenticatedFetch(
+    `${API_URL}/api/games/roulette/validate-bet`,
+    {
+      method: "POST",
+      body: JSON.stringify({ type, value, amount }),
+    }
+  );
 
   if (!response.ok) {
     const error = await response.json();
@@ -306,7 +362,7 @@ export interface PotentialPayoutResponse {
   message?: string;
   totalBet?: number;
   potentialPayouts?: Array<{
-    bet: any;
+    bet: PlacedBet;
     payout: number;
     netWin: number;
   }>;
@@ -322,11 +378,10 @@ export interface PotentialPayoutResponse {
 export async function calculatePotentialPayout(
   simpleBets: SimpleBet[]
 ): Promise<PotentialPayoutResponse> {
-  const response = await fetch(
+  const response = await authenticatedFetch(
     `${API_URL}/api/games/roulette/calculate-potential-payout`,
     {
       method: "POST",
-      headers: getAuthHeaders(),
       body: JSON.stringify({ simpleBets }),
     }
   );
@@ -349,11 +404,10 @@ export async function getUserGameHistory(
   page: number = 1,
   limit: number = 20
 ): Promise<GameHistoryResponse> {
-  const response = await fetch(
+  const response = await authenticatedFetch(
     `${API_URL}/api/games/roulette/history?page=${page}&limit=${limit}`,
     {
       method: "GET",
-      headers: getAuthHeaders(),
     }
   );
 
@@ -387,10 +441,12 @@ export async function getUserGameHistory(
  * @returns Wallet balance information
  */
 export async function getWalletBalance(): Promise<WalletBalance> {
-  const response = await fetch(`${API_URL}/api/games/roulette/balance`, {
-    method: "GET",
-    headers: getAuthHeaders(),
-  });
+  const response = await authenticatedFetch(
+    `${API_URL}/api/games/roulette/balance`,
+    {
+      method: "GET",
+    }
+  );
 
   if (!response.ok) {
     const error = await response.json();
@@ -409,9 +465,8 @@ export async function getWalletBalance(): Promise<WalletBalance> {
  * @returns Array of available games
  */
 export async function getAvailableGames() {
-  const response = await fetch(`${API_URL}/api/games`, {
+  const response = await authenticatedFetch(`${API_URL}/api/games`, {
     method: "GET",
-    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
