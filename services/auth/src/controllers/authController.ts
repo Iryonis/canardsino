@@ -106,7 +106,7 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
-// Refresh access token
+// Refresh access token with token rotation
 export const refresh = async (req: Request, res: Response) => {
   try {
     const { refreshToken } = req.body;
@@ -118,10 +118,15 @@ export const refresh = async (req: Request, res: Response) => {
     // Verify refresh token
     const payload = verifyRefreshToken(refreshToken);
 
-    // Generate new access token
-    const accessToken = generateAccessToken({ userId: payload.userId, email: payload.email, username: payload.username });
+    // Generate new tokens (rotation for security)
+    const tokenPayload = { userId: payload.userId, email: payload.email, username: payload.username };
+    const newAccessToken = generateAccessToken(tokenPayload);
+    const newRefreshToken = generateRefreshToken(tokenPayload);
 
-    return res.status(200).json({ accessToken });
+    return res.status(200).json({
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+    });
   } catch (error) {
     console.error('Refresh error:', error);
     return res.status(401).json({ error: 'Invalid or expired refresh token' });

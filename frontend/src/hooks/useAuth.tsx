@@ -1,20 +1,8 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  ReactNode,
-} from "react";
-import {
-  authApi,
-  User,
-  LoginRequest,
-  RegisterRequest,
-  AuthResponse,
-  tokenStorage,
-} from "../lib/api";
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { authApi, User, LoginRequest, RegisterRequest, AuthResponse } from '../lib/api';
+import { tokenManager } from '../lib/tokenManager';
 
 interface AuthState {
   user: User | null;
@@ -35,7 +23,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  const logout = useCallback(() => {
+    authApi.logout();
+    setAuthState({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+    });
+  }, []);
+
   useEffect(() => {
+    // Initialize token manager with logout callback
+    tokenManager.initialize(logout);
+
+    // Check if user is authenticated on mount
     const checkAuth = async () => {
       const token = tokenStorage.getAccessToken();
 
@@ -46,25 +47,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const profile = await authApi.getProfile();
-        if (profile) {
-          setUser(profile);
-          setIsAuthenticated(true);
-        } else {
-          setUser(null);
-          setIsAuthenticated(false);
-        }
-      } catch (error) {
-        console.error("Auth check failed:", error);
-        setUser(null);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
+        const user = await authApi.getProfile();
+        setAuthState({
+          user,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+      } catch {
+        setAuthState({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
       }
     };
 
     checkAuth();
-  }, []);
+  }, [logout]);
 
   const login = async (data: LoginRequest): Promise<AuthResponse> => {
     const response = await authApi.login(data);
@@ -78,12 +77,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(response.user);
     setIsAuthenticated(true);
     return response;
-  };
-
-  const logout = () => {
-    authApi.logout();
-    setUser(null);
-    setIsAuthenticated(false);
   };
 
   return (
