@@ -31,6 +31,7 @@ export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
 
   useEffect(() => {
     if (!token) {
+      setError('Authentication required. Please login.');
       return;
     }
 
@@ -110,8 +111,15 @@ export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
         </div>
 
         {!token ? (
-          <div className="bg-red-900/20 border border-red-500 text-red-400 p-4 rounded-lg">
-            Token not found. Please login again.
+          <div className="bg-red-900/20 border border-red-500 text-red-400 p-6 rounded-lg text-center">
+            <p className="text-lg font-semibold mb-2">🔒 Authentication Required</p>
+            <p className="mb-4">You need to be logged in to view statistics.</p>
+            <a 
+              href="/login" 
+              className="inline-block px-6 py-2 bg-gradient-to-r from-blue to-blue-light hover:from-blue-light hover:to-blue-lightest text-white font-medium rounded-lg transition-all duration-300"
+            >
+              Go to Login
+            </a>
           </div>
         ) : (
           <>

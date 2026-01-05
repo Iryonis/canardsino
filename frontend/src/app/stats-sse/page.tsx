@@ -13,11 +13,13 @@ export default function StatsSsePage() {
   const router = useRouter();
   const [balance, setBalance] = useState(0);
 
+  // Redirect if not authenticated
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
+    if (!isLoading && (!isAuthenticated || !user)) {
+      console.log('🔒 Not authenticated, redirecting to login...');
+      router.replace('/login');
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, user, router]);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -27,6 +29,7 @@ export default function StatsSsePage() {
     }
   }, [isAuthenticated, user]);
 
+  // Show loading while checking auth
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-blue-darkest">
@@ -38,8 +41,16 @@ export default function StatsSsePage() {
     );
   }
 
+  // Don't render anything if not authenticated
   if (!isAuthenticated || !user) {
-    return null;
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-blue-darkest">
+        <div className="text-center">
+          <p className="text-blue-light mb-4">Authentication required</p>
+          <p className="text-blue-light/70 text-sm">Redirecting to login...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
