@@ -94,7 +94,10 @@ export class StatsAggregator {
         payout: bet.payout || 0,
         won: bet.won || false,
       })) : [],
-      details: game.rouletteDetails,
+      details: {
+        winningNumber: game.rouletteDetails?.winningNumber,
+        winningColor: game.rouletteDetails?.color,
+      },
     }));
 
     const allGames = gameHistory.map((game: any) => ({
@@ -111,7 +114,10 @@ export class StatsAggregator {
         payout: bet.payout || 0,
         won: bet.won || false,
       })) : [],
-      details: game.rouletteDetails,
+      details: {
+        winningNumber: game.rouletteDetails?.winningNumber,
+        winningColor: game.rouletteDetails?.color,
+      },
     }));
 
     const stats = {
