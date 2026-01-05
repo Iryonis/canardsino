@@ -1,15 +1,22 @@
 // API client for CoinCoin Casino
 
-import { AuthError, NetworkError, NotFoundError, ServerError, ValidationError, ApiError } from './apiErrors';
-import { tokenManager } from './tokenManager';
+import {
+  AuthError,
+  NetworkError,
+  NotFoundError,
+  ServerError,
+  ValidationError,
+  ApiError,
+} from "./apiErrors";
+import { tokenManager } from "./tokenManager";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost";
 
 export interface User {
   id: string;
   email: string;
   username: string;
-  createdAt: Date;
+  createdAt?: Date;
 }
 
 export interface AuthTokens {
@@ -19,7 +26,9 @@ export interface AuthTokens {
 
 export interface AuthResponse {
   user: User;
-  tokens: AuthTokens;
+  token: string;
+  refreshToken: string;
+  tokens?: AuthTokens;
 }
 
 export interface LoginRequest {
@@ -50,13 +59,13 @@ async function fetchApi<T>(
   const url = `${API_URL}${endpoint}`;
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
 
   const token = tokenManager.getAccessToken();
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   try {
@@ -66,7 +75,9 @@ async function fetchApi<T>(
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+      const error = await response
+        .json()
+        .catch(() => ({ error: "Unknown error" }));
 
       // Handle 401 with automatic token refresh
       if (response.status === 401 && !skipAuthRetry) {
@@ -76,25 +87,25 @@ async function fetchApi<T>(
           return fetchApi<T>(endpoint, options, true);
         }
         // Refresh failed, throw auth error
-        throw new AuthError(error.error || 'Session expired');
+        throw new AuthError(error.error || "Session expired");
       }
 
       // Throw specific error types based on status code
       switch (response.status) {
         case 401:
-          throw new AuthError(error.error || 'Authentication failed');
+          throw new AuthError(error.error || "Authentication failed");
         case 400:
         case 422:
-          throw new ValidationError(error.error || 'Validation failed');
+          throw new ValidationError(error.error || "Validation failed");
         case 404:
-          throw new NotFoundError(error.error || 'Resource not found');
+          throw new NotFoundError(error.error || "Resource not found");
         case 500:
         case 502:
         case 503:
-          throw new ServerError(error.error || 'Server error');
+          throw new ServerError(error.error || "Server error");
         default:
           throw new ApiError(
-            error.error || 'Request failed',
+            error.error || "Request failed",
             response.status,
             `HTTP_${response.status}`
           );
@@ -109,32 +120,44 @@ async function fetchApi<T>(
     }
 
     // Otherwise it's a network error
-    throw new NetworkError(err instanceof Error ? err.message : 'Network error occurred');
+    throw new NetworkError(
+      err instanceof Error ? err.message : "Network error occurred"
+    );
   }
 }
 
 // Auth API methods
 export const authApi = {
   register: async (data: RegisterRequest): Promise<AuthResponse> => {
-    const response = await fetchApi<AuthResponse>('/api/auth/register', {
-      method: 'POST',
+    const response = await fetchApi<AuthResponse>("/api/auth/register", {
+      method: "POST",
       body: JSON.stringify(data),
     });
-    tokenManager.setTokens(response.tokens);
+    tokenManager.setTokens(response.tokens || { accessToken: response.token, refreshToken: response.refreshToken });
     return response;
   },
 
   login: async (data: LoginRequest): Promise<AuthResponse> => {
-    const response = await fetchApi<AuthResponse>('/api/auth/login', {
-      method: 'POST',
+    const response = await fetchApi<AuthResponse>("/api/auth/login", {
+      method: "POST",
       body: JSON.stringify(data),
     });
-    tokenManager.setTokens(response.tokens);
+    tokenManager.setTokens(response.tokens || { accessToken: response.token, refreshToken: response.refreshToken });
     return response;
   },
 
-  getProfile: async (): Promise<User> => {
-    return fetchApi<User>('/api/auth/profile');
+  getProfile: async (): Promise<User | null> => {
+    const token = tokenStorage.getAccessToken();
+    if (!token) {
+      return null;
+    }
+
+    try {
+      return await fetchApi<User>("/api/auth/profile");
+    } catch {
+      tokenStorage.clearTokens();
+      return null;
+    }
   },
 
   logout: (): void => {

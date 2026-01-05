@@ -1,8 +1,21 @@
-'use client';
+"use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { authApi, User, LoginRequest, RegisterRequest, AuthResponse } from '../lib/api';
-import { tokenManager } from '../lib/tokenManager';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+} from "react";
+import {
+  authApi,
+  User,
+  LoginRequest,
+  RegisterRequest,
+  AuthResponse,
+} from "../lib/api";
+import { tokenManager } from "../lib/tokenManager";
 
 interface AuthState {
   user: User | null;
@@ -89,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }
