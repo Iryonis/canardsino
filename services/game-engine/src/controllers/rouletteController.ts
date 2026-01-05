@@ -8,6 +8,7 @@ import {
   EUROPEAN_ROULETTE_CONFIG,
 } from "../models/RouletteTypes";
 import { GameSession, GameHistory, BigWin } from "../models";
+import { publishGameCompleted } from "../events/publisher"; 
 
 // In-memory storage for sessions and wallets (mock)
 const sessions = new Map<string, RouletteSession>();
@@ -258,6 +259,17 @@ async function saveGameToDatabase(
     });
 
     await gameHistory.save();
+
+    // Publish game completed event
+    publishGameCompleted({
+      userId,
+      gameId: gameHistory._id.toString(),
+      gameType: 'roulette',
+      totalBet: gameResult.totalBet,
+      totalWin: gameResult.totalWin,
+      netResult: gameResult.netResult,
+      winningNumber: gameResult.spinResult.winningNumber,
+    }).catch(err => console.error('Failed to publish game.completed:', err));
 
     // Create or update GameSession
     let gameSession = await GameSession.findOne({ sessionId });
