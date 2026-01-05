@@ -1,6 +1,8 @@
 // frontend/src/components/stats/RecentGamesTable.tsx
 'use client';
 
+import { useState } from 'react';
+
 interface RouletteDetails {
   winningNumber?: number;
   winningColor?: string;
@@ -25,12 +27,30 @@ interface RecentGame {
 
 interface RecentGamesTableProps {
   games: RecentGame[];
+  allGames?: RecentGame[];
 }
 
-export default function RecentGamesTable({ games }: RecentGamesTableProps) {
+export default function RecentGamesTable({ games, allGames = [] }: RecentGamesTableProps) {
+  const [showAll, setShowAll] = useState(false);
+  
+  const displayGames = showAll && allGames.length > 0 ? allGames : games;
+  const hasMoreGames = allGames.length > games.length;
+
   return (
     <div className="bg-blue-dark/30 backdrop-blur border border-blue/50 rounded-lg p-6">
-      <h2 className="text-2xl font-bold text-blue-lightest mb-6">Recent Games</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold text-blue-lightest">
+          {showAll ? 'All Games History' : 'Recent Games'}
+        </h2>
+        {hasMoreGames && (
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="px-4 py-2 bg-gradient-to-r from-blue to-blue-light hover:from-blue-light hover:to-blue-lightest text-white font-medium rounded-lg transition-all duration-300"
+          >
+            {showAll ? 'Show Recent Only' : `Show All (${allGames.length})`}
+          </button>
+        )}
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -45,7 +65,7 @@ export default function RecentGamesTable({ games }: RecentGamesTableProps) {
             </tr>
           </thead>
           <tbody>
-            {games.map((game, idx) => (
+            {displayGames.map((game, idx) => (
               <tr 
                 key={idx} 
                 className="border-b border-blue/20 hover:bg-blue-dark/30 transition-colors"
@@ -107,7 +127,7 @@ export default function RecentGamesTable({ games }: RecentGamesTableProps) {
             ))}
           </tbody>
         </table>
-        {games.length === 0 && (
+        {displayGames.length === 0 && (
           <div className="text-center py-8 text-blue-light">
             No games played yet
           </div>

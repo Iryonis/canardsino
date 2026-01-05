@@ -16,6 +16,7 @@ export interface SSEStats {
   biggestLoss: number;
   favoriteGame: string;
   recentGames: any[];
+  allGames: any[];
   lastUpdated: string;
 }
 
@@ -46,7 +47,6 @@ export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
 
     // Listen for initial stats
     eventSource.addEventListener('initial-stats', (event: any) => {
-      console.log('📨 Received initial-stats:', event.data);
       try {
         const data = JSON.parse(event.data);
         setStats(data);
@@ -57,11 +57,8 @@ export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
 
     // Listen for game completed events
     eventSource.addEventListener('game-completed', (event: any) => {
-      console.log('📨 Received game-completed:', event.data);
       try {
         const data = JSON.parse(event.data);
-        console.log('📊 Parsed game-completed data:', data);
-        console.log('📈 Stats from event:', data.stats);
         // Update with the new stats from the event
         if (data.stats) {
           console.log('✅ Updating stats with:', data.stats);
@@ -144,7 +141,10 @@ export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
                 />
 
                 {/* Recent Games */}
-                <RecentGamesTable games={stats.recentGames} />
+                <RecentGamesTable 
+                  games={stats.recentGames} 
+                  allGames={stats.allGames}
+                />
 
                 {/* Last Updated */}
                 <p className="text-blue-light text-sm text-right">

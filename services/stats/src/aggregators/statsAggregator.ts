@@ -24,6 +24,7 @@ export interface UserStats {
   biggestLoss: number;
   favoriteGame: string;
   recentGames: any[];
+  allGames: any[];
   lastUpdated: string;
 }
 
@@ -90,6 +91,23 @@ export class StatsAggregator {
       details: game.rouletteDetails,
     }));
 
+    const allGames = gameHistory.map((game: any) => ({
+      id: game._id,
+      gameType: game.gameType,
+      totalBet: game.totalBet,
+      totalWin: game.totalWin,
+      netResult: game.netResult,
+      createdAt: game.createdAt,
+      bets: game.bets ? game.bets.map((bet: any) => ({
+        type: bet.betType,
+        values: bet.numbers || [],
+        amount: bet.amount,
+        payout: bet.payout || 0,
+        won: bet.won || false,
+      })) : [],
+      details: game.rouletteDetails,
+    }));
+
     return {
       userId,
       totalGames,
@@ -100,6 +118,7 @@ export class StatsAggregator {
       biggestWin,
       biggestLoss,
       favoriteGame: 'roulette',
+      allGames,
       recentGames,
       lastUpdated: new Date().toISOString(),
     };
