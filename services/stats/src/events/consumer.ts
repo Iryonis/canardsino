@@ -94,16 +94,25 @@ export class EventConsumer {
   }
 
   /**
-   * Handle a game completed even. Get the updated stats and send via SSE.
+   * Handle a game completed event. Update stats incrementally using cache.
    * @param payload 
    */
   private async handleGameCompleted(payload: any): Promise<void> {
-    const { userId, gameId, totalBet, totalWin, netResult, winningNumber } = payload;
+    const { userId, gameId, totalBet, totalWin, netResult, winningNumber, bets, winningColor } = payload;
 
     console.log(`🎮 Handling game.completed for userId: ${userId}`);
 
     try {
-      const stats = await StatsAggregator.getUserStats(userId);
+      // Use incremental update with Redis cache
+      const stats = await StatsAggregator.updateStatsIncremental(userId, {
+        gameId,
+        totalBet,
+        totalWin,
+        netResult,
+        winningNumber,
+        winningColor,
+        bets,
+      });
 
       console.log(`📊 Sending stats update via SSE for userId: ${userId}`);
       
@@ -121,7 +130,7 @@ export class EventConsumer {
       
       console.log(`✅ Stats sent successfully for userId: ${userId}`);
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      console.error('Error updating stats:', error);
     }
   }
 

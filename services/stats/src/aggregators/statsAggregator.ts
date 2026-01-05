@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { redisCache } from '../cache/redisClient';
 
 const GameHistorySchema = new mongoose.Schema({
   userId: String,
@@ -33,15 +34,24 @@ export class StatsAggregator {
   /**
    * Compute and return user stats. The stats include total games played, total bets, total wins, net result,
    * win rate, biggest win/loss, recent game history and his favorite game type.
+   * Uses Redis cache for performance.
    * @param userId The user ID to compute stats for 
+   * @param forceRefresh Force refresh from DB, bypassing cache
    * @returns a UserStats object
    */
-  static async getUserStats(userId: string): Promise<UserStats> {
+  static async getUserStats(userId: string, forceRefresh: boolean = false): Promise<UserStats> {
     console.log(`📊 Fetching stats for userId: ${userId}`);
     
-    // Debug: check total count in collection
-    const totalInCollection = await GameHistory.countDocuments({});
-    console.log(`   Total documents in gamehistories collection: ${totalInCollection}`);
+    // Try to get from cache first
+    if (!forceRefresh) {
+      const cachedStats = await redisCache.getUserStats(userId);
+      if (cachedStats) {
+        console.log(`✅ Returning cached stats for userId: ${userId}`);
+        return cachedStats;
+      }
+    }
+
+    console.log(`📊 Computing stats from DB for userId: ${userId}`);
     
     const gameHistory = await GameHistory.find({ userId })
       .sort({ createdAt: -1 })
@@ -52,11 +62,7 @@ export class StatsAggregator {
     
     if (gameHistory.length > 0) {
       console.log(`   Sample game:`, JSON.stringify(gameHistory[0], null, 2));
-    } else if (totalInCollection > 0) {
-      // Show a sample from any user
-      const sample = await GameHistory.findOne({}).lean();
-      console.log(`   Collection has data but not for this userId. Sample userId:`, sample?.userId);
-    }
+    } 
 
     const totalGames = gameHistory.length;
     const totalBets = gameHistory.reduce((sum: number, game: any) => sum + (game.totalBet || 0), 0);
@@ -108,7 +114,7 @@ export class StatsAggregator {
       details: game.rouletteDetails,
     }));
 
-    return {
+    const stats = {
       userId,
       totalGames,
       totalBets,
@@ -122,6 +128,79 @@ export class StatsAggregator {
       recentGames,
       lastUpdated: new Date().toISOString(),
     };
+
+    // Cache the computed stats
+    await redisCache.setUserStats(userId, stats);
+
+    return stats;
+  }
+
+  /**
+   * Update stats incrementally when a new game is completed.
+   * More efficient than recomputing everything from DB.
+   * @param userId User ID
+   * @param newGameData New game data from event
+   */
+  static async updateStatsIncremental(userId: string, newGameData: any): Promise<UserStats> {
+    console.log(`📊 Updating stats incrementally for userId: ${userId}`);
+
+    // Get current stats from cache
+    let stats = await redisCache.getUserStats(userId);
+
+    // If not in cache, compute from DB
+    if (!stats) {
+      console.log(`⚠️ No cached stats, computing from DB`);
+      return await this.getUserStats(userId, true);
+    }
+
+    // Prepare new game entry
+    const newGame = {
+      id: newGameData.gameId,
+      gameType: 'roulette',
+      totalBet: newGameData.totalBet,
+      totalWin: newGameData.totalWin,
+      netResult: newGameData.netResult,
+      createdAt: new Date().toISOString(),
+      bets: newGameData.bets || [],
+      details: {
+        winningNumber: newGameData.winningNumber,
+        winningColor: newGameData.winningColor,
+      },
+    };
+
+    // Update aggregated stats
+    stats.totalGames += 1;
+    stats.totalBets += newGameData.totalBet;
+    stats.totalWins += newGameData.totalWin;
+    stats.netResult += newGameData.netResult;
+
+    // Update win rate
+    const isWin = newGameData.netResult > 0;
+    const previousWins = Math.round((stats.winRate / 100) * (stats.totalGames - 1));
+    const newWins = isWin ? previousWins + 1 : previousWins;
+    stats.winRate = parseFloat(((newWins / stats.totalGames) * 100).toFixed(2));
+
+    // Update biggest win/loss
+    if (newGameData.netResult > stats.biggestWin) {
+      stats.biggestWin = newGameData.netResult;
+    }
+    if (newGameData.netResult < stats.biggestLoss) {
+      stats.biggestLoss = newGameData.netResult;
+    }
+
+    // Update recent games (prepend new game, keep max 10)
+    stats.recentGames = [newGame, ...stats.recentGames].slice(0, 10);
+
+    // Update all games (prepend new game, keep max 100)
+    stats.allGames = [newGame, ...(stats.allGames || [])].slice(0, 100);
+
+    stats.lastUpdated = new Date().toISOString();
+
+    // Update cache
+    await redisCache.setUserStats(userId, stats);
+
+    console.log(`✅ Stats updated incrementally for userId: ${userId}`);
+    return stats;
   }
 
   static async getUserHistory(

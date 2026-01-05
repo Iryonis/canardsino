@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import statsRoutes from './routes/statsRoutes';
 import { eventConsumer } from './events/consumer';
+import { redisCache } from './cache/redisClient';
 
 dotenv.config();
 
@@ -59,6 +60,11 @@ async function startServer() {
     await mongoose.connect(connectionUrl);
     console.log('✅ Connected to MongoDB:', dbName);
 
+    // Connect to Redis cache
+    await redisCache.connect().catch(err => {
+      console.error('⚠️ Redis connection failed, will work without cache:', err.message);
+    });
+
     // Connect to RabbitMQ consumer (non-blocking, will retry on failure)
     eventConsumer.connect().catch(err => {
       console.error('⚠️ Initial RabbitMQ connection failed, will retry:', err.message);
@@ -85,6 +91,7 @@ startServer();
 process.on('SIGINT', async () => {
   console.log('\n🛑 Shutting down...');
   await eventConsumer.disconnect();
+  await redisCache.disconnect();
   await mongoose.disconnect();
   process.exit(0);
 });
