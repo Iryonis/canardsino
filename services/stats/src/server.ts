@@ -41,15 +41,28 @@ app.use('/stats', statsRoutes);
 // Start server
 async function startServer() {
   try {
-    // Connect to MongoDB (game_engine_db for reading GameHistory)
+    // Connect to MongoDB
     const mongoUrl = process.env.MONGO_URL || 'mongodb://localhost:27017';
-    const dbName = process.env.MONGO_DB_NAME || 'game_engine_db';
+    const dbName = process.env.MONGO_DB_NAME || 'casino_stats';
     
-    await mongoose.connect(`${mongoUrl}/${dbName}`);
+    // Build connection string properly
+    let connectionUrl: string;
+    if (mongoUrl.includes('?')) {
+      // URL has query params: insert DB name before the query string
+      const [baseUrl, queryString] = mongoUrl.split('?');
+      connectionUrl = `${baseUrl}/${dbName}?${queryString}`;
+    } else {
+      // No query params: just append DB name
+      connectionUrl = `${mongoUrl}/${dbName}`;
+    }
+    
+    await mongoose.connect(connectionUrl);
     console.log('✅ Connected to MongoDB:', dbName);
 
-    // Connect to RabbitMQ consumer
-    await eventConsumer.connect();
+    // Connect to RabbitMQ consumer (non-blocking, will retry on failure)
+    eventConsumer.connect().catch(err => {
+      console.error('⚠️ Initial RabbitMQ connection failed, will retry:', err.message);
+    });
 
     app.listen(PORT, () => {
       console.log(`\n📊 Stats Service running on port ${PORT}`);

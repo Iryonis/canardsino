@@ -12,8 +12,7 @@ const GameHistorySchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-const GameHistory = mongoose.model('GameHistory', GameHistorySchema, 'gamehistories');
-
+const GameHistory = mongoose.model('GameHistory', GameHistorySchema, 'game_history');
 export interface UserStats {
   userId: string;
   totalGames: number;
@@ -37,10 +36,26 @@ export class StatsAggregator {
    * @returns a UserStats object
    */
   static async getUserStats(userId: string): Promise<UserStats> {
+    console.log(`📊 Fetching stats for userId: ${userId}`);
+    
+    // Debug: check total count in collection
+    const totalInCollection = await GameHistory.countDocuments({});
+    console.log(`   Total documents in gamehistories collection: ${totalInCollection}`);
+    
     const gameHistory = await GameHistory.find({ userId })
       .sort({ createdAt: -1 })
       .limit(100)
       .lean();
+
+    console.log(`   Found ${gameHistory.length} games for this user`);
+    
+    if (gameHistory.length > 0) {
+      console.log(`   Sample game:`, JSON.stringify(gameHistory[0], null, 2));
+    } else if (totalInCollection > 0) {
+      // Show a sample from any user
+      const sample = await GameHistory.findOne({}).lean();
+      console.log(`   Collection has data but not for this userId. Sample userId:`, sample?.userId);
+    }
 
     const totalGames = gameHistory.length;
     const totalBets = gameHistory.reduce((sum: number, game: any) => sum + (game.totalBet || 0), 0);
@@ -65,6 +80,13 @@ export class StatsAggregator {
       totalWin: game.totalWin,
       netResult: game.netResult,
       createdAt: game.createdAt,
+      bets: game.bets ? game.bets.map((bet: any) => ({
+        type: bet.betType,
+        values: bet.numbers || [],
+        amount: bet.amount,
+        payout: bet.payout || 0,
+        won: bet.won || false,
+      })) : [],
       details: game.rouletteDetails,
     }));
 

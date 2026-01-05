@@ -259,6 +259,8 @@ async function saveGameToDatabase(
     });
 
     await gameHistory.save();
+    
+    console.log(`✅ GameHistory saved to DB! ID: ${gameHistory._id}, userId: ${userId}`);
 
     // Publish game completed event
     publishGameCompleted({

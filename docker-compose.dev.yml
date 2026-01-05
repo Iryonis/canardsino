@@ -72,7 +72,7 @@ services:
       - MONGO_DB_NAME=casino_auth
       - JWT_SECRET=${JWT_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - REDIS_URL=redis://redis:6379
     volumes:
       - ./services/auth/src:/app/src:cached
@@ -102,7 +102,7 @@ services:
       - POLYGON_RPC_URL=${POLYGON_RPC_URL}
       - CCC_TOKEN_ADDRESS=${CCC_TOKEN_ADDRESS}
       - HOT_WALLET_PRIVATE_KEY=${HOT_WALLET_PRIVATE_KEY}
-      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - REDIS_URL=redis://redis:6379
       - CMC_SERVICE_URL=http://coinmarketcap:8007
     volumes:
@@ -133,8 +133,9 @@ services:
       - RANDOM_ORG_SERVICE=http://random-org:8008
       - WALLET_SERVICE=http://wallet:8005
       - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017?authSource=admin
+      - MONGO_DB_NAME=game_engine_db
       - DB_NAME_GAME_ENGINE=game_engine_db
-      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - REDIS_URL=redis://redis:6379
     volumes:
       - ./services/game-engine/src:/app/src:cached
@@ -165,7 +166,7 @@ services:
       - MONGO_DB_NAME=chat_db
       - JWT_SECRET=${JWT_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - REDIS_URL=redis://redis:6379
     volumes:
       - ./services/chat/src:/app/src:cached
@@ -190,9 +191,10 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=8005
-      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
-      - MONGO_DB_NAME=casino_stats
-      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - JWT_SECRET=${JWT_SECRET}
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017?authSource=admin
+      - MONGO_DB_NAME=game_engine_db
+      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - REDIS_URL=redis://redis:6379
     volumes:
       - ./services/stats/src:/app/src:cached
@@ -217,7 +219,7 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=8006
-      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - REDIS_URL=redis://redis:6379
     volumes:
       - ./services/notifier/src:/app/src:cached

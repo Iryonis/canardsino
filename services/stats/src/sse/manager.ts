@@ -59,13 +59,21 @@ class StatsSSEManager {
 
   sendEvent(userId: string, eventName: string, data: any): void {
     const userClients = this.clients.get(userId);
-    if (!userClients || userClients.length === 0) return;
+    
+    console.log(`📡 Attempting to send event "${eventName}" to userId: ${userId}`);
+    console.log(`   Connected clients for this user: ${userClients?.length || 0}`);
+    
+    if (!userClients || userClients.length === 0) {
+      console.log(`⚠️ No clients connected for userId: ${userId}`);
+      return;
+    }
 
     const message = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
 
     userClients.forEach(client => {
       try {
         client.res.write(message);
+        console.log(`✅ Event "${eventName}" sent to userId: ${userId}`);
       } catch (error) {
         console.error(`❌ Error sending SSE to ${userId}:`, error);
         this.removeClient(userId, client.res);

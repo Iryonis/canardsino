@@ -100,9 +100,13 @@ export class EventConsumer {
   private async handleGameCompleted(payload: any): Promise<void> {
     const { userId, gameId, totalBet, totalWin, netResult, winningNumber } = payload;
 
+    console.log(`🎮 Handling game.completed for userId: ${userId}`);
+
     try {
       const stats = await StatsAggregator.getUserStats(userId);
 
+      console.log(`📊 Sending stats update via SSE for userId: ${userId}`);
+      
       sseManager.sendEvent(userId, 'game-completed', {
         gameId,
         result: {
@@ -114,6 +118,8 @@ export class EventConsumer {
         stats,
         timestamp: new Date().toISOString(),
       });
+      
+      console.log(`✅ Stats sent successfully for userId: ${userId}`);
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
