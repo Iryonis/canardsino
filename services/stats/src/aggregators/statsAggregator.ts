@@ -10,10 +10,13 @@ const GameHistorySchema = new mongoose.Schema({
   totalWin: Number,
   netResult: Number,
   rouletteDetails: Object,
+  // Additional game-specific fields can be added here
+  metadata: Object,
   createdAt: { type: Date, default: Date.now },
 });
 
 const GameHistory = mongoose.model('GameHistory', GameHistorySchema, 'game_history');
+
 export interface UserStats {
   userId: string;
   totalGames: number;
@@ -24,6 +27,7 @@ export interface UserStats {
   biggestWin: number;
   biggestLoss: number;
   favoriteGame: string;
+  gameStats: Record<string, { gamesPlayed: number; netResult: number }>; // Stats per game type
   recentGames: any[];
   allGames: any[];
   lastUpdated: string;
@@ -32,9 +36,66 @@ export interface UserStats {
 export class StatsAggregator {
   
   /**
+   * Extract game-specific details based on game type
+   * @param game Game object from DB
+   * @returns Game details object
+   */
+  private static extractGameDetails(game: any): any {
+    switch (game.gameType) {
+      case 'roulette':
+        return {
+          winningNumber: game.rouletteDetails?.winningNumber,
+          winningColor: game.rouletteDetails?.color,
+          parity: game.rouletteDetails?.parity,
+          range: game.rouletteDetails?.range,
+        };
+      default:
+        return game.metadata || {};
+    }
+  }
+
+  /**
+   * Calculate favorite game type based on number of games played
+   * @param gameHistory Array of games
+   * @returns Favorite game type
+   */
+  private static calculateFavoriteGame(gameHistory: any[]): string {
+    if (gameHistory.length === 0) return 'none';
+
+    const gameCounts = gameHistory.reduce((acc: Record<string, number>, game: any) => {
+      const gameType = game.gameType || 'unknown';
+      acc[gameType] = (acc[gameType] || 0) + 1;
+      return acc;
+    }, {});
+
+    const favoriteGame = Object.keys(gameCounts).reduce((a, b) => 
+      gameCounts[a] > gameCounts[b] ? a : b
+    );
+
+    return favoriteGame;
+  }
+
+  /**
+   * Calculate stats per game type
+   * @param gameHistory Array of games
+   * @returns Object with stats per game type
+   */
+  private static calculateGameStats(gameHistory: any[]): Record<string, { gamesPlayed: number; netResult: number }> {
+    return gameHistory.reduce((acc: any, game: any) => {
+      const gameType = game.gameType || 'unknown';
+      if (!acc[gameType]) {
+        acc[gameType] = { gamesPlayed: 0, netResult: 0 };
+      }
+      acc[gameType].gamesPlayed += 1;
+      acc[gameType].netResult += game.netResult || 0;
+      return acc;
+    }, {});
+  }
+
+  /**
    * Compute and return user stats. The stats include total games played, total bets, total wins, net result,
-   * win rate, biggest win/loss, recent game history and his favorite game type.
-   * Uses Redis cache for performance.
+   * win rate, biggest win/loss, recent game history and favorite game type.
+   * Uses Redis cache for performance. Now supports multiple game types.
    * @param userId The user ID to compute stats for 
    * @param forceRefresh Force refresh from DB, bypassing cache
    * @returns a UserStats object
@@ -80,9 +141,15 @@ export class StatsAggregator {
       ? Math.min(...gameHistory.map((game: any) => game.netResult || 0), 0)
       : 0;
 
+    // Calculate favorite game dynamically
+    const favoriteGame = this.calculateFavoriteGame(gameHistory);
+
+    // Calculate stats per game type
+    const gameStats = this.calculateGameStats(gameHistory);
+
     const recentGames = gameHistory.slice(0, 10).map((game: any) => ({
       id: game._id,
-      gameType: game.gameType,
+      gameType: game.gameType || 'unknown',
       totalBet: game.totalBet,
       totalWin: game.totalWin,
       netResult: game.netResult,
@@ -94,15 +161,12 @@ export class StatsAggregator {
         payout: bet.payout || 0,
         won: bet.won || false,
       })) : [],
-      details: {
-        winningNumber: game.rouletteDetails?.winningNumber,
-        winningColor: game.rouletteDetails?.color,
-      },
+      details: this.extractGameDetails(game),
     }));
 
     const allGames = gameHistory.map((game: any) => ({
       id: game._id,
-      gameType: game.gameType,
+      gameType: game.gameType || 'unknown',
       totalBet: game.totalBet,
       totalWin: game.totalWin,
       netResult: game.netResult,
@@ -114,10 +178,7 @@ export class StatsAggregator {
         payout: bet.payout || 0,
         won: bet.won || false,
       })) : [],
-      details: {
-        winningNumber: game.rouletteDetails?.winningNumber,
-        winningColor: game.rouletteDetails?.color,
-      },
+      details: this.extractGameDetails(game),
     }));
 
     const stats = {
@@ -129,7 +190,8 @@ export class StatsAggregator {
       winRate: parseFloat(winRate.toFixed(2)),
       biggestWin,
       biggestLoss,
-      favoriteGame: 'roulette',
+      favoriteGame,
+      gameStats,
       allGames,
       recentGames,
       lastUpdated: new Date().toISOString(),
@@ -144,6 +206,7 @@ export class StatsAggregator {
   /**
    * Update stats incrementally when a new game is completed.
    * More efficient than recomputing everything from DB.
+   * Now supports multiple game types dynamically.
    * @param userId User ID
    * @param newGameData New game data from event
    */
@@ -159,19 +222,29 @@ export class StatsAggregator {
       return await this.getUserStats(userId, true);
     }
 
+    const gameType = newGameData.gameType || 'unknown';
+
+    // Extract game-specific details
+    let details: any = {};
+    if (gameType === 'roulette') {
+      details = {
+        winningNumber: newGameData.winningNumber,
+        winningColor: newGameData.winningColor,
+      };
+    } else {
+      details = newGameData.details || {};
+    }
+
     // Prepare new game entry
     const newGame = {
       id: newGameData.gameId,
-      gameType: 'roulette',
+      gameType,
       totalBet: newGameData.totalBet,
       totalWin: newGameData.totalWin,
       netResult: newGameData.netResult,
       createdAt: new Date().toISOString(),
       bets: newGameData.bets || [],
-      details: {
-        winningNumber: newGameData.winningNumber,
-        winningColor: newGameData.winningColor,
-      },
+      details,
     };
 
     // Update aggregated stats
@@ -194,6 +267,25 @@ export class StatsAggregator {
       stats.biggestLoss = newGameData.netResult;
     }
 
+    // Update gameStats per type
+    if (!stats.gameStats) {
+      stats.gameStats = {};
+    }
+    if (!stats.gameStats[gameType]) {
+      stats.gameStats[gameType] = { gamesPlayed: 0, netResult: 0 };
+    }
+    stats.gameStats[gameType].gamesPlayed += 1;
+    stats.gameStats[gameType].netResult += newGameData.netResult;
+
+    // Recalculate favorite game dynamically
+    const gameCounts = Object.keys(stats.gameStats).reduce((acc: any, gt: string) => {
+      acc[gt] = stats.gameStats[gt].gamesPlayed;
+      return acc;
+    }, {});
+    stats.favoriteGame = Object.keys(gameCounts).reduce((a, b) => 
+      gameCounts[a] > gameCounts[b] ? a : b, 'none'
+    );
+
     // Update recent games (prepend new game, keep max 10)
     stats.recentGames = [newGame, ...stats.recentGames].slice(0, 10);
 
@@ -205,7 +297,6 @@ export class StatsAggregator {
     // Update cache
     await redisCache.setUserStats(userId, stats);
 
-    console.log(`✅ Stats updated incrementally for userId: ${userId}`);
     return stats;
   }
 

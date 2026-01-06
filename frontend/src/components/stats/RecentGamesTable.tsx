@@ -79,14 +79,20 @@ export default function RecentGamesTable({ games, allGames = [] }: RecentGamesTa
                           game.details.winningColor === 'red' 
                             ? 'bg-red-600' 
                             : game.details.winningColor === 'black'
-                            ? 'bg-gray-900'
+                            ? 'bg-gray-900 border border-gray-600'
                             : 'bg-green-600'
                         }`}
                       >
                         {game.details.winningNumber}
                       </span>
-                      <span className="text-blue-light text-xs uppercase">
-                        {game.details.winningColor}
+                      <span className={`text-xs uppercase font-medium ${
+                        game.details.winningColor === 'red'
+                          ? 'text-red-400'
+                          : game.details.winningColor === 'black'
+                          ? 'text-gray-300'
+                          : 'text-green-400'
+                      }`}>
+                        {game.details.winningColor || 'green'}
                       </span>
                     </div>
                   )}
