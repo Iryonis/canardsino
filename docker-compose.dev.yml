@@ -135,7 +135,8 @@ services:
       - GAME_PORT=8003
       - JWT_SECRET=${JWT_SECRET}
       - RANDOM_ORG_SERVICE=http://random-org:8008
-      - WALLET_SERVICE=http://wallet:8005
+      - WALLET_SERVICE_URL=http://wallet:8002
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017?authSource=admin
       - DB_NAME_GAME_ENGINE=game_engine_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
