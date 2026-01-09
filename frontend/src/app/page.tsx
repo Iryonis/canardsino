@@ -52,7 +52,9 @@ export default function Home() {
                 <div className="flex justify-between">
                   <span className="text-blue-light">Member Since:</span>
                   <span className="text-blue-lightest font-medium">
-                    {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                    {user.createdAt
+                      ? new Date(user.createdAt).toLocaleDateString()
+                      : "N/A"}
                   </span>
                 </div>
               </div>
@@ -61,10 +63,10 @@ export default function Home() {
                   Ready to play some games?
                 </p>
                 <Link
-                  href="/roulette"
+                  href="/games-page"
                   className="mt-4 block w-full py-3 bg-gradient-to-r from-blue to-blue-light hover:from-blue-light hover:to-blue-lightest text-blue-darkest font-bold rounded-lg transition text-center"
                 >
-                  🎰 Go to Roulette
+                  Check the games
                 </Link>
               </div>
             </div>
