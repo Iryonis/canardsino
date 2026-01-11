@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { headers } from "next/headers";
 import "./globals.css";
 import { AuthProvider } from "@/hooks/useAuth";
 import { FloatingChat } from "@/components";
+import Web3Provider from "@/context/Web3Provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,20 +21,25 @@ export const metadata: Metadata = {
   description: "The ultimate crypto casino experience",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const headersObj = await headers();
+  const cookies = headersObj.get("cookie");
+
   return (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider>
-          {children}
-          <FloatingChat />
-        </AuthProvider>
+        <Web3Provider cookies={cookies}>
+          <AuthProvider>
+            {children}
+            <FloatingChat />
+          </AuthProvider>
+        </Web3Provider>
       </body>
     </html>
   );

@@ -120,7 +120,6 @@ services:
       - MONGO_DB_NAME=casino_wallet
       - POLYGON_RPC_URL=${POLYGON_RPC_URL}
       - CCC_TOKEN_ADDRESS=${CCC_TOKEN_ADDRESS}
-      - HOT_WALLET_PRIVATE_KEY=${HOT_WALLET_PRIVATE_KEY}
       - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - CMC_SERVICE_URL=http://coinmarketcap:8007

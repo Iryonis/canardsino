@@ -42,6 +42,9 @@ services:
       - NEXT_PUBLIC_API_URL=http://localhost
       - NEXT_PUBLIC_GAME_ENGINE_URL=http://localhost/api/roulette
       - NEXT_PUBLIC_WALLET_URL=http://localhost/api/wallet
+      - NEXT_PUBLIC_REOWN_PROJECT_ID=${NEXT_PUBLIC_REOWN_PROJECT_ID}
+      - NEXT_PUBLIC_USDC_ADDRESS=${NEXT_PUBLIC_USDC_ADDRESS}
+      - NEXT_PUBLIC_HOT_WALLET_ADDRESS=${NEXT_PUBLIC_HOT_WALLET_ADDRESS}
     volumes:
       - ./frontend/src:/app/src:cached
       - ./frontend/public:/app/public:cached
@@ -100,9 +103,10 @@ services:
       - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
       - MONGO_DB_NAME=casino_wallet
       - POLYGON_RPC_URL=${POLYGON_RPC_URL}
-      - CCC_TOKEN_ADDRESS=${CCC_TOKEN_ADDRESS}
-      - HOT_WALLET_PRIVATE_KEY=${HOT_WALLET_PRIVATE_KEY}
-      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      - HOT_WALLET_ADDRESS=${HOT_WALLET_ADDRESS}
+      - JWT_SECRET=${JWT_SECRET}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - RABBITMQ_URL=amqp://rabbitmq:5672
       - REDIS_URL=redis://redis:6379
       - CMC_SERVICE_URL=http://coinmarketcap:8007
     volumes:
@@ -131,7 +135,8 @@ services:
       - GAME_PORT=8003
       - JWT_SECRET=${JWT_SECRET}
       - RANDOM_ORG_SERVICE=http://random-org:8008
-      - WALLET_SERVICE=http://wallet:8005
+      - WALLET_SERVICE_URL=http://wallet:8002
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017?authSource=admin
       - MONGO_DB_NAME=game_engine_db
       - DB_NAME_GAME_ENGINE=game_engine_db

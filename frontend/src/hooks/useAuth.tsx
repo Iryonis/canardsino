@@ -27,6 +27,7 @@ interface AuthContextType extends AuthState {
   login: (data: LoginRequest) => Promise<AuthResponse>;
   register: (data: RegisterRequest) => Promise<AuthResponse>;
   logout: () => void;
+  getAccessToken: () => string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -92,8 +93,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return response;
   };
 
+  const getAccessToken = useCallback(() => {
+    return tokenManager.getAccessToken();
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ ...authState, login, register, logout }}>
+    <AuthContext.Provider value={{ ...authState, login, register, logout, getAccessToken }}>
       {children}
     </AuthContext.Provider>
   );
