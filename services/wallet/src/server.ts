@@ -2,7 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
-import walletRoutes from "./routes/index.js";
+import walletRoutes from "./routes/walletRoutes.js";
 
 // Load environment variables
 dotenv.config();

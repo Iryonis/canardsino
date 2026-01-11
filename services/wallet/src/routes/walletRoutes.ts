@@ -6,7 +6,8 @@ import {
   getTransactions,
   updateBalance,
   getBalanceInternal,
-} from "../controllers/index.js";
+  giveTokens,
+} from "../controllers/walletController.js";
 import { authMiddleware, internalAuthMiddleware } from "../middleware/auth.js";
 
 const router = Router();
@@ -18,6 +19,7 @@ router.get("/deposit-info", getDepositInfo);
 router.get("/balance", authMiddleware, getBalance);
 router.post("/deposit", authMiddleware, processDeposit);
 router.get("/transactions", authMiddleware, getTransactions);
+router.post("/give", authMiddleware, giveTokens);
 
 // Internal endpoints (for game engine) - require internal API key
 router.post("/internal/update-balance", internalAuthMiddleware, updateBalance);

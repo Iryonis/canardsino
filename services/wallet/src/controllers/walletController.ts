@@ -1,11 +1,11 @@
 import { Request, Response } from "express";
-import { Wallet, Transaction } from "../models/index.js";
+import { Wallet, Transaction } from "../models/wallet.js";
 import {
   verifyDeposit,
   getHotWalletAddress,
   getUsdcAddress,
   getExchangeRate,
-} from "../blockchains/index.js";
+} from "../blockchains/polygon.js";
 
 // Extended request with user info from JWT
 interface AuthRequest extends Request {
@@ -224,6 +224,46 @@ export async function getBalanceInternal(req: Request, res: Response) {
     });
   } catch (error) {
     console.error("Error getting internal balance:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/**
+ * Give tokens to the authenticated user (self-credit)
+ */
+export async function giveTokens(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { amount } = req.body;
+
+    if (amount === undefined || amount === null) {
+      return res.status(400).json({ error: "Amount is required" });
+    }
+
+    const parsedAmount = Number(amount);
+
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: "Amount must be a positive number" });
+    }
+
+    // Update wallet balance (create if doesn't exist)
+    const wallet = await Wallet.findOneAndUpdate(
+      { userId },
+      { $inc: { balance: parsedAmount } },
+      { upsert: true, new: true }
+    );
+
+    return res.json({
+      success: true,
+      amount: parsedAmount,
+      newBalance: wallet.balance,
+    });
+  } catch (error) {
+    console.error("Error giving tokens:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 }
