@@ -11,6 +11,7 @@ export interface SSEStats {
   totalBets: number;
   totalWins: number;
   netResult: number;
+  netResultUSD?: number;
   winRate: number;
   biggestWin: number;
   biggestLoss: number;
@@ -137,6 +138,7 @@ export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
                   totalGames={stats.totalGames}
                   winRate={stats.winRate}
                   netResult={stats.netResult}
+                  netResultUSD={stats.netResultUSD}
                   biggestWin={stats.biggestWin}
                 />
 

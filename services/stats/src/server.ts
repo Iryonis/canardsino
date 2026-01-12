@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import statsRoutes from "./routes/statsRoutes";
 import { eventConsumer } from "./events/consumer";
+import { priceConsumer } from "./events/priceConsumer";
 import { redisCache } from "./cache/redisClient";
 
 dotenv.config();
@@ -70,10 +71,18 @@ async function startServer() {
       );
     });
 
-    // Connect to RabbitMQ consumer (non-blocking, will retry on failure)
+    // Connect to RabbitMQ consumer for game events (non-blocking, will retry on failure)
     eventConsumer.connect().catch((err) => {
       console.error(
         "⚠️ Initial RabbitMQ connection failed, will retry:",
+        err.message
+      );
+    });
+
+    // Connect to RabbitMQ consumer for price events
+    priceConsumer.connect().catch((err) => {
+      console.error(
+        "⚠️ Price consumer connection failed, will retry:",
         err.message
       );
     });
@@ -99,6 +108,7 @@ startServer();
 process.on("SIGINT", async () => {
   console.log("\n🛑 Shutting down...");
   await eventConsumer.disconnect();
+  await priceConsumer.disconnect();
   await redisCache.disconnect();
   await mongoose.disconnect();
   process.exit(0);

@@ -1,6 +1,7 @@
 import amqp, { ChannelModel, Channel } from 'amqplib';
 import { sseManager } from '../sse/manager';
 import { StatsAggregator } from '../aggregators/statsAggregator';
+import { priceCache } from '../cache/priceCache';
 
 const RABBIT_URL = process.env.RABBITMQ_URL || 'amqp://rabbitmq:5672';
 const RABBIT_EXCHANGE = process.env.RABBIT_EXCHANGE || 'game.events';
@@ -115,7 +116,14 @@ export class EventConsumer {
       });
 
       console.log(`📊 Sending stats update via SSE for userId: ${userId}`);
-      
+
+      const usdValues = {
+        totalBetUSD: priceCache.convertCCCtoUSD(totalBet),
+        totalWinUSD: priceCache.convertCCCtoUSD(totalWin),
+        netResultUSD: priceCache.convertCCCtoUSD(netResult),
+        netResultTotalUSD: priceCache.convertCCCtoUSD(stats.netResult),
+      };
+
       sseManager.sendEvent(userId, 'game-completed', {
         gameId,
         result: {
@@ -123,8 +131,12 @@ export class EventConsumer {
           totalWin,
           netResult,
           winningNumber,
+          ...usdValues,
         },
-        stats,
+        stats: {
+          ...stats,
+          netResultUSD: usdValues.netResultTotalUSD,
+        },
         timestamp: new Date().toISOString(),
       });
       
