@@ -55,6 +55,8 @@ type BetType =
  * @returns Roulette game page
  */
 export default function RoulettePage() {
+  // Display state
+  const [display, setDisplay] = useState<boolean>(false);
   // Wheel state
   const [mustSpin, setMustSpin] = useState(false);
   const [winningNumber, setWinningNumber] = useState<number | null>(null);
@@ -442,14 +444,13 @@ export default function RoulettePage() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-blue-darkest">
-      {/* Header */}
-      <Navbar balance={balance} currentPage="European Roulette" />
-
-      <div className="container mx-auto px-4 py-8">
-        {/* Wheel at the top */}
-        <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-8 mb-8">
+  if (display) {
+    /* Wheel at the top */
+    return (
+      <div className="min-h-screen bg-blue-darkest">
+        {/* Header */}
+        <Navbar balance={balance} currentPage="European Roulette" />
+        <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-8 my-8">
           <div className="flex justify-center mb-6">
             <RouletteWheel
               winningNumber={winningNumber}
@@ -457,21 +458,42 @@ export default function RoulettePage() {
             />
           </div>
 
-          <button
-            onClick={handleSpinClick}
-            disabled={mustSpin || loading || bets.length === 0}
-            className={`w-full max-w-md mx-auto block py-4 text-lg font-bold rounded-lg transition ${
-              mustSpin || loading || bets.length === 0
-                ? "bg-gray-600 text-gray-300 cursor-not-allowed"
-                : "bg-gradient-to-r from-blue to-blue-light hover:from-blue-light hover:to-blue-lightest text-blue-darkest"
-            }`}
-          >
-            {loading
-              ? "Processing..."
-              : mustSpin
-              ? "Spinning..."
-              : "SPIN the wheel!"}
-          </button>
+          <div className="flex flex-col md:flex-row items-center justify-center gap-4">
+            <button
+              disabled={mustSpin || loading}
+              className={`trapezoid_left p-3 border border-blue rounded-lg font-semibold text-lg transition-all duration-5000 active:scale-95 ${
+                mustSpin || loading || bets.length === 0
+                  ? "flex-1 bg-green-600 text-white"
+                  : "bg-gray-600 text-gray-300 cursor-not-allowed"
+              }`}
+              onClick={() => {
+                setDisplay(!display);
+              }}
+            >
+              New bet
+            </button>
+            <button
+              onClick={handleSpinClick}
+              disabled={mustSpin || loading || bets.length === 0}
+              className={`mx-auto block p-4 text-lg font-semibold rounded-lg transition-all duration-5000 ${
+                mustSpin || loading || bets.length === 0
+                  ? "bg-gray-600 text-gray-300 cursor-not-allowed"
+                  : "flex-1 bg-gradient-to-r from-green-700 to-green-600 hover:from-green-600 hover:to-green-500 text-white"
+              }`}
+            >
+              {mustSpin ? "Spinning..." : "SPIN the wheel!"}
+            </button>
+            <button
+              disabled={mustSpin || loading}
+              className={`trapezoid_right p-3 border border-blue rounded-lg font-semibold text-lg transition-all duration-5000 ${
+                mustSpin || loading || bets.length === 0
+                  ? "flex-1 bg-green-600 text-white"
+                  : "bg-gray-600 text-gray-300 cursor-not-allowed"
+              }`}
+            >
+              Replay same bet
+            </button>
+          </div>
 
           <div className="absolute top-4 right-4 text-center">
             <GameResult result={result} error={error} />
@@ -483,69 +505,100 @@ export default function RoulettePage() {
             />
           </div>
         </div>
+      </div>
+    );
+  } else {
+    return (
+      <div className="min-h-screen bg-blue-darkest">
+        {/* Header */}
+        <Navbar balance={balance} currentPage="European Roulette" />
 
-        {/* Betting panel below */}
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left column - Bet Amount and Current Bets */}
-          <div className="lg:col-span-1">
-            <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-6 sticky top-4">
-              <BettingControls
-                betAmount={betAmount}
-                onBetAmountChange={setBetAmount}
-              />
+        <div className="container mx-auto px-4 py-8">
+          {/* Betting panel below */}
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Left column - Bet Amount and Current Bets */}
+            <div className="lg:col-span-1">
+              <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-6 sticky top-4">
+                <BettingControls
+                  betAmount={betAmount}
+                  onBetAmountChange={setBetAmount}
+                />
 
-              <BetErrorDisplay error={betError} />
+                <BetErrorDisplay error={betError} />
 
-              <CurrentBets
-                bets={bets}
-                multipliers={config.payouts}
-                maxPotentialWin={maxPotentialWin}
-                onRemoveBet={removeBet}
-                onClearAll={clearBets}
-              />
+                <CurrentBets
+                  bets={bets}
+                  multipliers={config.payouts}
+                  maxPotentialWin={maxPotentialWin}
+                  onRemoveBet={removeBet}
+                  onClearAll={clearBets}
+                />
+              </div>
+            </div>
+
+            {/* Middle and right columns - Roulette table */}
+            <div className="lg:col-span-2">
+              <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-6">
+                <BetInfoPanel payouts={config.payouts} />
+
+                <RouletteTable
+                  selectedNumbers={selectedNumbers}
+                  redNumbers={config.redNumbers}
+                  onNumberClick={toggleNumberSelection}
+                  onColumnBet={(column) => addNumberBet("column", column)}
+                  onDozenBet={(dozen) => addNumberBet("dozen", dozen)}
+                  onSimpleBet={addSimpleBet}
+                />
+
+                {/* Action buttons */}
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={addAdvancedBet}
+                    disabled={selectedNumbers.length === 0}
+                    className={`flex-1 py-2 rounded-lg font-semibold text-lg transition ${
+                      selectedNumbers.length === 0
+                        ? "bg-gray-600 cursor-not-allowed text-gray-400"
+                        : "bg-green-600 hover:bg-green-700 text-white"
+                    }`}
+                  >
+                    Place Bet ({betAmount} coins)
+                  </button>
+                  <button
+                    onClick={() => setSelectedNumbers([])}
+                    className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold text-lg transition"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+
+                <SelectedNumbersDisplay selectedNumbers={selectedNumbers} />
+              </div>
             </div>
           </div>
-
-          {/* Middle and right columns - Roulette table */}
-          <div className="lg:col-span-2">
-            <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-6">
-              <BetInfoPanel payouts={config.payouts} />
-
-              <SelectedNumbersDisplay selectedNumbers={selectedNumbers} />
-
-              <RouletteTable
-                selectedNumbers={selectedNumbers}
-                redNumbers={config.redNumbers}
-                onNumberClick={toggleNumberSelection}
-                onColumnBet={(column) => addNumberBet("column", column)}
-                onDozenBet={(dozen) => addNumberBet("dozen", dozen)}
-                onSimpleBet={addSimpleBet}
-              />
-
-              {/* Action buttons */}
-              <div className="flex gap-3 mt-4">
-                <button
-                  onClick={addAdvancedBet}
-                  disabled={selectedNumbers.length === 0}
-                  className={`flex-1 py-2 rounded-lg font-bold text-lg transition ${
-                    selectedNumbers.length === 0
-                      ? "bg-gray-600 cursor-not-allowed text-gray-400"
-                      : "bg-green-600 hover:bg-green-700 text-white"
-                  }`}
-                >
-                  Place Bet ({betAmount} coins)
-                </button>
-                <button
-                  onClick={() => setSelectedNumbers([])}
-                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-lg transition"
-                >
-                  Clear Selection
-                </button>
-              </div>
+          <div className="lg:col-span-2 mt-4">
+            <div
+              className={`flex bg-blue-dark/30 backdrop-blur border border-blue rounded-lg p-2 transition-all duration-300 shadow-lg shadow-black/50 justify-center ${
+                bets.length === 0 ? "" : "group hover:p-0"
+              }`}
+            >
+              <button
+                className={`p-2 rounded-lg transition-all duration-300 ${
+                  bets.length === 0
+                    ? "flex-0 px-6 bg-gray-600 cursor-not-allowed text-gray-400"
+                    : "flex-1 group-hover:p-4 bg-green-600 hover:bg-green-500 active:scale-95"
+                }`}
+                onClick={() => {
+                  setDisplay(!display);
+                }}
+              >
+                <span className="text-white font-semibold group-hover:animate-pulse group-hover:text-2xl group-hover:underline transition-all duration-300">
+                  Play!
+                </span>
+              </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 }

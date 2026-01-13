@@ -20,7 +20,7 @@ export default function SelectedNumbersDisplay({
   if (selectedNumbers.length === 0) return null;
 
   return (
-    <div className="mb-4 p-3 bg-blue/20 rounded-lg">
+    <div className="mt-4 p-3 bg-blue/20 rounded-lg">
       <div className="text-sm text-blue-lightest font-semibold">
         Selected: {selectedNumbers.join(", ")} ({selectedNumbers.length} number
         {selectedNumbers.length > 1 ? "s" : ""})

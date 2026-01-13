@@ -72,14 +72,9 @@ export default function RouletteWheel({
         return prev + fullRotations * 360 + deltaToTarget;
       });
 
-      // Reset display number separately
-      setDisplayNumber(null);
-
-      const timer = setTimeout(() => {
+      setTimeout(() => {
         setDisplayNumber(winningNumber);
       }, 5000);
-
-      return () => clearTimeout(timer);
     }
   }, [isSpinning, winningNumber]);
 

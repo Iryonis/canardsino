@@ -19,7 +19,7 @@ export default function GamesCard({
   return (
     <Link
       href={url}
-      className=" max-w-1/3 max-h-1/10 flex flex-col hover:scale-95 transition-transform duration-200"
+      className=" max-w-1/3 max-h-1/10 flex flex-col hover:scale-95 active:scale-90 transition-transform duration-200"
     >
       <div className="bg-white/5 border-beige rounded border-2 shadow-lg shadow-black/50">
         <div className="flex justify-center items-center bg-beige/5 border-b-2 border-beige overflow-hidden">
