@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { formatUnits } from "viem";
 import { useAuth } from "@/hooks/useAuth";
@@ -32,14 +32,7 @@ export function TokenBalance() {
     query: { enabled: !!address },
   });
 
-  // Fetch CCC balance from wallet service
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchCCCBalance();
-    }
-  }, [isAuthenticated]);
-
-  const fetchCCCBalance = async () => {
+  const fetchCCCBalance = useCallback(async () => {
     try {
       const token = getAccessToken();
       if (!token) return;
@@ -55,7 +48,15 @@ export function TokenBalance() {
     } catch (err) {
       console.error("Error fetching CCC balance:", err);
     }
-  };
+  }, [getAccessToken]);
+
+  // Fetch CCC balance from wallet service
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchCCCBalance();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   if (!isConnected) {
     return null;

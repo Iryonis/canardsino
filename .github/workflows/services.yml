@@ -2,16 +2,16 @@ name: Services CI
 
 on:
   workflow_call:
-  push:
-    paths:
-      - 'services/**'
-      - 'shared/**'
-      - '.github/workflows/services.yml'
-  pull_request:
-    paths:
-      - 'services/**'
-      - 'shared/**'
-      - '.github/workflows/services.yml'
+  # push:
+  #   paths:
+  #     - 'services/**'
+  #     - 'shared/**'
+  #     - '.github/workflows/services.yml'
+  # pull_request:
+  #   paths:
+  #     - 'services/**'
+  #     - 'shared/**'
+  #     - '.github/workflows/services.yml'
 
 jobs:
   build-services:

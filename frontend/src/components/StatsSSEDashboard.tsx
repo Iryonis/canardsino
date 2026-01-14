@@ -5,6 +5,16 @@ import { useEffect, useState, useMemo } from 'react';
 import { tokenManager } from '@/lib/tokenManager';
 import { StatsOverview, StatsDetails, RecentGamesTable } from './stats';
 
+interface GameRecord {
+  id: string;
+  gameType: string;
+  totalBet: number;
+  totalWin: number;
+  netResult: number;
+  createdAt: string;
+  [key: string]: unknown;
+}
+
 export interface SSEStats {
   userId: string;
   totalGames: number;
@@ -15,8 +25,8 @@ export interface SSEStats {
   biggestWin: number;
   biggestLoss: number;
   favoriteGame: string;
-  recentGames: any[];
-  allGames: any[];
+  recentGames: GameRecord[];
+  allGames: GameRecord[];
   lastUpdated: string;
 }
 
@@ -26,12 +36,13 @@ interface StatsSSEDashboardProps {
 
 export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
   const [stats, setStats] = useState<SSEStats | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const token = useMemo(() => tokenManager.getAccessToken(), []);
+  const [error, setError] = useState<string | null>(
+    !token ? 'Authentication required. Please login.' : null
+  );
 
   useEffect(() => {
     if (!token) {
-      setError('Authentication required. Please login.');
       return;
     }
 
@@ -47,7 +58,7 @@ export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
     };
 
     // Listen for initial stats
-    eventSource.addEventListener('initial-stats', (event: any) => {
+    eventSource.addEventListener('initial-stats', (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
         setStats(data);
@@ -57,7 +68,7 @@ export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
     });
 
     // Listen for game completed events
-    eventSource.addEventListener('game-completed', (event: any) => {
+    eventSource.addEventListener('game-completed', (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
         // Update with the new stats from the event
@@ -73,7 +84,7 @@ export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
     });
 
     // Listen for connection confirmation
-    eventSource.addEventListener('connected', (event: any) => {
+    eventSource.addEventListener('connected', (event: MessageEvent) => {
       console.log('📨 Received connected event:', event.data);
     });
 
