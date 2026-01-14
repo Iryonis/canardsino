@@ -47,6 +47,7 @@ export default function RouletteWheel({
 
   useEffect(() => {
     if (isSpinning && winningNumber !== null) {
+      setDisplayNumber(null);
       // Degrees per slot
       const degreesPerSlot = 360 / wheelOrder.length;
 

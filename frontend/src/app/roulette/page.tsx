@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import RouletteWheel from "@/components/RouletteWheel";
 import {
   BettingControls,
@@ -31,6 +31,7 @@ import {
   type GameResult as GameResultType,
 } from "@/lib/gameApi";
 import { Navbar } from "@/components/navbar/navbar";
+import Fireworks from "react-canvas-confetti/dist/presets/fireworks";
 
 /**
  * Bet type for roulette bets
@@ -63,17 +64,24 @@ export default function RoulettePage() {
 
   // Betting state
   const [bets, setBets] = useState<Bet[]>([]);
+  const [prevBets, setPrevBets] = useState<Bet[]>([]);
   const [betAmount, _setBetAmount] = useState(10);
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
 
   // Game state
   const [balance, setBalance] = useState(0);
-  const [result, setResult] = useState<string>("Place at least one bet");
+  const [result, setResult] = useState<string>(
+    "Place your bets and spin the wheel!"
+  );
   const [history, setHistory] = useState<GameHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingBets, setLoadingBets] = useState(false);
   const [error, setError] = useState<string>("");
   const [betError, setBetError] = useState<string>("");
   const [maxPotentialWin, setMaxPotentialWin] = useState(0);
+
+  // Fireworks controller
+  const fireworksController = useRef<any>(null);
 
   // Configuration from backend
   const [config, setConfig] = useState<RouletteConfig | null>(null);
@@ -142,7 +150,7 @@ export default function RoulettePage() {
 
     setLoading(true);
     setError("");
-    setResult("");
+    setResult("Spinning the wheel...");
 
     try {
       // Convert bets to backend format
@@ -189,6 +197,18 @@ export default function RoulettePage() {
     }
   };
 
+  const setSameBets = () => {
+    if (prevBets.reduce((sum, b) => sum + b.amount, 0) <= balance) {
+      setLoadingBets(true);
+      setBets(prevBets);
+      setResult("Setting the same bets...");
+      setTimeout(() => {
+        setLoadingBets(false);
+        setResult("Your bets are set: spin the wheel!");
+      }, 5000);
+    }
+  };
+
   /**
    * Handles the completion of a spin animation and displays results
    * @param gameResult - The result from the game engine
@@ -204,6 +224,18 @@ export default function RoulettePage() {
     await loadBalance();
 
     if (netResult > 0) {
+      if (netResult / bets.reduce((sum, bet) => sum + bet.amount, 0) >= 10) {
+        // Trigger fireworks
+        if (fireworksController.current) {
+          fireworksController.current.run({ speed: 3 });
+          setTimeout(() => {
+            if (fireworksController.current) {
+              fireworksController.current.stop();
+            }
+          }, 5000);
+        }
+      }
+
       setResult(
         `You WON ${netResult} coins! The number was ${spinResult.winningNumber} (${spinResult.color})`
       );
@@ -219,6 +251,7 @@ export default function RoulettePage() {
       );
     }
 
+    setPrevBets(bets);
     setBets([]);
     setSelectedNumbers([]);
   };
@@ -467,6 +500,12 @@ export default function RoulettePage() {
     /* Wheel at the top */
     return (
       <div className="min-h-screen bg-blue-darkest">
+        <Fireworks
+          className="z-50 pointer-events-none fixed top-0 left-0 w-full h-full"
+          onInit={({ conductor }) => {
+            fireworksController.current = conductor;
+          }}
+        />
         {/* Header */}
         <Navbar balance={balance} currentPage="European Roulette" />
         <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-8 my-8">
@@ -477,10 +516,12 @@ export default function RoulettePage() {
             />
           </div>
 
+          <GameResult result={result} error={error} />
+
           <div className="flex flex-col md:flex-row items-center justify-center gap-4">
             <button
-              disabled={mustSpin || loading}
-              className={`trapezoid_left p-3 border border-blue rounded-lg font-semibold text-lg transition-all duration-5000 active:scale-95 ${
+              disabled={mustSpin || loading || bets.length !== 0}
+              className={`trapezoid_left p-3 border border-blue rounded-lg whitespace-nowrap font-semibold text-lg transition-all duration-5000 active:scale-95 ${
                 mustSpin || loading || bets.length === 0
                   ? "flex-1 bg-green-600 text-white"
                   : "bg-gray-600 text-gray-300 cursor-not-allowed"
@@ -489,33 +530,39 @@ export default function RoulettePage() {
                 setDisplay(!display);
               }}
             >
-              New bet
+              Place a new bet
             </button>
             <button
               onClick={handleSpinClick}
-              disabled={mustSpin || loading || bets.length === 0}
-              className={`mx-auto block p-4 text-lg font-semibold rounded-lg transition-all duration-5000 ${
+              disabled={mustSpin || loading || bets.length === 0 || loadingBets}
+              className={`p-4 text-lg font-semibold rounded-lg whitespace-nowrap transition-all duration-5000 shadow-md border ${
                 mustSpin || loading || bets.length === 0
-                  ? "bg-gray-600 text-gray-300 cursor-not-allowed"
-                  : "flex-1 bg-gradient-to-r from-green-700 to-green-600 hover:from-green-600 hover:to-green-500 text-white"
+                  ? "flex-none bg-gray-600 text-gray-300 cursor-not-allowed border-gray-600 shadow-transparent"
+                  : "flex-1 bg-green-600 text-white border-green-300 shadow-green-500"
               }`}
             >
-              {mustSpin ? "Spinning..." : "SPIN the wheel!"}
+              {mustSpin
+                ? "Spinning..."
+                : bets.length > 0
+                ? "Spin the wheel!"
+                : "Place your bets"}
             </button>
             <button
-              disabled={mustSpin || loading}
-              className={`trapezoid_right p-3 border border-blue rounded-lg font-semibold text-lg transition-all duration-5000 ${
+              disabled={mustSpin || loading || loadingBets}
+              onClick={() => {
+                setSameBets();
+              }}
+              className={`trapezoid_right p-3 border border-blue rounded-lg whitespace-nowrap font-semibold text-lg transition-all duration-5000 ${
                 mustSpin || loading || bets.length === 0
                   ? "flex-1 bg-green-600 text-white"
                   : "bg-gray-600 text-gray-300 cursor-not-allowed"
               }`}
             >
-              Replay same bet
+              Place the same bet
             </button>
           </div>
 
           <div className="absolute top-4 right-4 text-center">
-            <GameResult result={result} error={error} />
             <GameHistory
               history={history.map(
                 (entry) => entry.rouletteDetails.winningNumber

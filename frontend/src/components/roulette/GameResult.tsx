@@ -19,7 +19,7 @@ interface GameResultProps {
 export default function GameResult({ result, error }: GameResultProps) {
   if (error) {
     return (
-      <div className="mt-4 max-w-md mx-auto p-4 rounded-lg text-center font-bold bg-red-500/20 text-red-400">
+      <div className="my-4 max-w-md mx-auto p-4 rounded-lg text-center font-bold bg-red-500/20 text-red-400">
         {error}
       </div>
     );
@@ -32,12 +32,12 @@ export default function GameResult({ result, error }: GameResultProps) {
 
   return (
     <div
-      className={`mt-4 max-w-md mx-auto p-4 rounded-lg text-center font-bold ${
+      className={`my-4 max-w-md mx-auto p-4 rounded-lg text-center font-bold ${
         isWin
-          ? "bg-green-500/20 text-green-400"
+          ? "bg-green-500/20 text-green-400 border border-green-300"
           : isLoss
-          ? "bg-red-500/20 text-red-400"
-          : "bg-blue/20 text-blue-light"
+          ? "bg-red-500/20 text-red-400 border border-red-300"
+          : "bg-blue/20 text-blue-light border border-blue-light"
       }`}
     >
       {result}
