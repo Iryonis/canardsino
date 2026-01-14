@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useChainId, useSwitchChain } from "wagmi";
 import { parseUnits, formatUnits } from "viem";
 import { useAuth } from "@/hooks/useAuth";
@@ -75,14 +75,7 @@ export function BuyForm() {
     hash: txHash,
   });
 
-  // Process deposit after transaction confirms
-  useEffect(() => {
-    if (isConfirmed && txHash && !isProcessing) {
-      processDeposit(txHash);
-    }
-  }, [isConfirmed, txHash]);
-
-  const processDeposit = async (hash: string) => {
+  const processDeposit = useCallback(async (hash: string) => {
     setIsProcessing(true);
     try {
       const token = getAccessToken();
@@ -119,7 +112,14 @@ export function BuyForm() {
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [address, getAccessToken, refetchBalance]);
+
+  // Process deposit after transaction confirms
+  useEffect(() => {
+    if (isConfirmed && txHash && !isProcessing) {
+      processDeposit(txHash);
+    }
+  }, [isConfirmed, txHash, isProcessing, processDeposit]);
 
   const calculateCCCAmount = (amount: string): number => {
     const num = parseFloat(amount);

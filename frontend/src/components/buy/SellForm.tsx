@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAccount } from "wagmi";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -16,14 +16,7 @@ export function SellForm() {
   const { isConnected } = useAccount();
   const { getAccessToken, isAuthenticated } = useAuth();
 
-  // Fetch CCC balance from wallet service
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchBalance();
-    }
-  }, [isAuthenticated]);
-
-  const fetchBalance = async () => {
+  const fetchBalance = useCallback(async () => {
     try {
       const token = getAccessToken();
       if (!token) return;
@@ -39,7 +32,14 @@ export function SellForm() {
     } catch (err) {
       console.error("Error fetching balance:", err);
     }
-  };
+  }, [getAccessToken]);
+
+  // Fetch CCC balance from wallet service
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchBalance();
+    }
+  }, [isAuthenticated, fetchBalance]);
 
   const calculateUSDCAmount = (amount: string): number => {
     const num = parseFloat(amount);
