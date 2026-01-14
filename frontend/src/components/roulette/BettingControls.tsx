@@ -6,9 +6,9 @@
 
 interface BettingControlsProps {
   /** Current bet amount */
-  betAmount: number;
+  betAmount: number | string;
   /** Callback when bet amount changes */
-  onBetAmountChange: (amount: number) => void;
+  onBetAmountChange: (amount: number | string) => void;
 }
 
 /**
@@ -20,11 +20,11 @@ export default function BettingControls({
   betAmount,
   onBetAmountChange,
 }: BettingControlsProps) {
-  const presetAmounts = [10, 25, 50, 100];
+  const presetAmounts = [10, 25, 50, 100, "All-in"];
 
   return (
-    <div className="border border-blue-light p-4 rounded-lg mb-6 bg-blue-dark/50">
-      <div className="mb-4">
+    <div className="border border-blue-light p-4 rounded-lg bg-blue-dark/50">
+      <div className="">
         <label className="block text-blue-light mb-2 font-semibold">
           Bet amount:
         </label>
@@ -40,7 +40,9 @@ export default function BettingControls({
             <button
               key={amount}
               onClick={() => onBetAmountChange(amount)}
-              className="py-2 bg-blue-dark hover:bg-blue border border-blue text-blue-lightest rounded text-sm transition"
+              className={`py-2 bg-blue-dark hover:bg-blue border border-blue text-blue-lightest rounded text-sm transition ${
+                amount === "All-in" ? "col-span-2" : ""
+              }`}
             >
               {amount}
             </button>

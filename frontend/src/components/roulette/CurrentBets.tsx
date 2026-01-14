@@ -44,7 +44,7 @@ export default function CurrentBets({
   const totalBet = bets.reduce((sum, bet) => sum + bet.amount, 0);
 
   return (
-    <div className="border border-blue-light p-4 rounded-lg bg-blue-dark/50">
+    <div className="mt-4 border border-blue-light p-4 rounded-lg bg-blue-dark/50">
       <h3 className="text-blue-light font-semibold mb-2">Current Bets:</h3>
       <div className="bg-blue-dark/50 rounded-lg p-3 space-y-2 max-h-65 overflow-y-auto">
         {bets.map((bet, idx) => {

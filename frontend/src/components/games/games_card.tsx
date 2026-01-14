@@ -19,7 +19,13 @@ export default function GamesCard({
   return (
     <Link
       href={url}
-      className=" max-w-1/3 max-h-1/10 flex flex-col hover:scale-95 active:scale-90 transition-transform duration-200"
+      aria-disabled={mode === "/" ? true : false}
+      tabIndex={mode === "/" ? -1 : 0}
+      className={`max-w-1/3 max-h-1/10 flex flex-col transition-transform duration-200 ${
+        mode === "/"
+          ? "cursor-not-allowed pointer-events-none"
+          : "hover:scale-95 active:scale-90"
+      }`}
     >
       <div className="bg-white/5 border-beige rounded border-2 shadow-lg shadow-black/50">
         <div className="flex justify-center items-center bg-beige/5 border-b-2 border-beige overflow-hidden">

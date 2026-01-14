@@ -1,12 +1,36 @@
 "use client";
 
-import { Navbar } from "@/components/navbar/navbar";
 import GamesCard from "@/components/games/games_card";
+import { useAuth } from "@/hooks/useAuth";
+import { Navbar } from "@/components/navbar/navbar";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { getWalletBalance } from "@/lib/gameApi";
 
 export default function GamesPage() {
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
+  const [balance, setBalance] = useState(0);
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!isLoading && (!isAuthenticated || !user)) {
+      console.log("🔒 Not authenticated, redirecting to login...");
+      router.replace("/login");
+    }
+  }, [isAuthenticated, isLoading, user, router]);
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      getWalletBalance()
+        .then((bal) => setBalance(bal.balance))
+        .catch((err) => console.error("Error fetching balance:", err));
+    }
+  }, [isAuthenticated, user]);
+
   return (
     <div className="min-h-screen bg-blue-darkest">
-      <Navbar balance={0} currentPage="Games" />
+      <Navbar balance={balance} currentPage="Games" />
       <div className="container flex flex-row gap-4 p-4 mx-auto mt-8 flex-wrap">
         <GamesCard
           name="European Roulette"

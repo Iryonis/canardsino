@@ -63,7 +63,7 @@ export default function RoulettePage() {
 
   // Betting state
   const [bets, setBets] = useState<Bet[]>([]);
-  const [betAmount, setBetAmount] = useState(10);
+  const [betAmount, _setBetAmount] = useState(10);
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
 
   // Game state
@@ -362,6 +362,15 @@ export default function RoulettePage() {
         return;
       }
 
+      if (
+        bet.amount > balance ||
+        bet.amount + bets.reduce((sum, b) => sum + b.amount, 0) > balance
+      ) {
+        setBetError("Insufficient balance for this bet");
+        setTimeout(() => setBetError(""), 3000);
+        return;
+      }
+
       // If validation succeeds, add the bet
       const newBets = [...bets, bet];
       setBets(newBets);
@@ -423,6 +432,16 @@ export default function RoulettePage() {
     setError("");
     setBetError("");
     setMaxPotentialWin(0);
+  };
+
+  const setBetAmount = (amount: number | string) => {
+    if (amount === "All-in") {
+      _setBetAmount(balance);
+    } else {
+      const parsedAmount =
+        typeof amount === "string" ? parseInt(amount) : amount;
+      _setBetAmount(parsedAmount);
+    }
   };
 
   /**
