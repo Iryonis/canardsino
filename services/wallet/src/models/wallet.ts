@@ -30,12 +30,18 @@ const walletSchema = new Schema<IWallet>(
 
 export const Wallet = mongoose.model<IWallet>("Wallet", walletSchema);
 
+// Supported deposit tokens
+export const DEPOSIT_TOKENS = ["USDC", "USDT", "WETH", "POL"] as const;
+export type DepositToken = (typeof DEPOSIT_TOKENS)[number];
+
 // Transaction record for deposits/withdrawals
 export interface ITransaction extends Document {
   userId: string;
   type: "deposit" | "withdrawal";
   amount: number; // CCC amount
-  usdcAmount: number; // USDC amount (6 decimals as number)
+  cryptoAmount: number; // Amount in original crypto (human readable)
+  cryptoSymbol: DepositToken; // Which crypto was deposited
+  priceUSD: number; // USD price at time of deposit
   txHash: string; // Polygon transaction hash
   status: "pending" | "confirmed" | "failed";
   walletAddress: string; // User's wallet address
@@ -59,7 +65,16 @@ const transactionSchema = new Schema<ITransaction>(
       type: Number,
       required: true,
     },
-    usdcAmount: {
+    cryptoAmount: {
+      type: Number,
+      required: true,
+    },
+    cryptoSymbol: {
+      type: String,
+      enum: DEPOSIT_TOKENS,
+      required: true,
+    },
+    priceUSD: {
       type: Number,
       required: true,
     },

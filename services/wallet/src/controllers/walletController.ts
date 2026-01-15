@@ -1,11 +1,15 @@
 import { Request, Response } from "express";
-import { Wallet, Transaction } from "../models/wallet.js";
+import { Wallet, Transaction, DEPOSIT_TOKENS, DepositToken } from "../models/wallet.js";
 import {
   verifyDeposit,
+  calculateCCCAmount,
   getHotWalletAddress,
-  getUsdcAddress,
-  getExchangeRate,
+  getSupportedTokens,
+  getCCCPerUSD,
 } from "../blockchains/polygon.js";
+
+// CMC service URL for price data
+const CMC_SERVICE_URL = process.env.CMC_SERVICE_URL || "http://coinmarketcap:8007";
 
 // Extended request with user info from JWT
 interface AuthRequest extends Request {
@@ -43,13 +47,13 @@ export async function getBalance(req: AuthRequest, res: Response) {
 }
 
 /**
- * Get deposit info (hot wallet address, exchange rate)
+ * Get deposit info (hot wallet address, supported tokens)
  */
 export async function getDepositInfo(req: AuthRequest, res: Response) {
   try {
     const hotWalletAddress = getHotWalletAddress();
-    const usdcAddress = getUsdcAddress();
-    const exchangeRate = getExchangeRate();
+    const supportedTokens = getSupportedTokens();
+    const cccPerUSD = getCCCPerUSD();
 
     if (!hotWalletAddress) {
       return res.status(500).json({ error: "Hot wallet not configured" });
@@ -57,14 +61,34 @@ export async function getDepositInfo(req: AuthRequest, res: Response) {
 
     return res.json({
       hotWalletAddress,
-      usdcAddress,
-      exchangeRate,
+      supportedTokens,
+      cccPerUSD,
       network: "polygon",
       chainId: 137,
     });
   } catch (error) {
     console.error("Error getting deposit info:", error);
     return res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/**
+ * Fetch current price from CMC service
+ */
+async function fetchCryptoPrice(symbol: string): Promise<number | null> {
+  try {
+    // Map WETH to ETH for price lookup
+    const priceSymbol = symbol === "WETH" ? "ETH" : symbol;
+    const response = await fetch(`${CMC_SERVICE_URL}/prices/${priceSymbol}`);
+    if (!response.ok) {
+      console.error(`Failed to fetch price for ${symbol}: ${response.status}`);
+      return null;
+    }
+    const data = await response.json();
+    return data.data?.price ?? null;
+  } catch (error) {
+    console.error(`Error fetching price for ${symbol}:`, error);
+    return null;
   }
 }
 
@@ -78,10 +102,20 @@ export async function processDeposit(req: AuthRequest, res: Response) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { txHash, walletAddress } = req.body;
+    const { txHash, walletAddress, cryptoSymbol } = req.body;
 
     if (!txHash || !walletAddress) {
       return res.status(400).json({ error: "txHash and walletAddress required" });
+    }
+
+    // Default to USDC for backward compatibility
+    const symbol: DepositToken = cryptoSymbol || "USDC";
+
+    if (!DEPOSIT_TOKENS.includes(symbol)) {
+      return res.status(400).json({
+        error: `Unsupported token: ${symbol}`,
+        supported: DEPOSIT_TOKENS,
+      });
     }
 
     // Check if transaction already processed
@@ -91,7 +125,7 @@ export async function processDeposit(req: AuthRequest, res: Response) {
     }
 
     // Verify the deposit on-chain
-    const verification = await verifyDeposit(txHash as `0x${string}`);
+    const verification = await verifyDeposit(txHash as `0x${string}`, symbol);
 
     if (!verification.valid) {
       return res.status(400).json({ error: verification.error });
@@ -102,12 +136,23 @@ export async function processDeposit(req: AuthRequest, res: Response) {
       return res.status(400).json({ error: "Wallet address mismatch" });
     }
 
+    // Fetch current price from CMC service
+    const priceUSD = await fetchCryptoPrice(symbol);
+    if (priceUSD === null) {
+      return res.status(503).json({ error: "Price data not available, please try again" });
+    }
+
+    // Calculate CCC amount based on crypto amount and USD price
+    const cccAmount = calculateCCCAmount(verification.cryptoAmount, priceUSD);
+
     // Create transaction record
     const transaction = await Transaction.create({
       userId,
       type: "deposit",
-      amount: verification.cccAmount,
-      usdcAmount: verification.amount,
+      amount: cccAmount,
+      cryptoAmount: verification.cryptoAmount,
+      cryptoSymbol: symbol,
+      priceUSD,
       txHash,
       status: "confirmed",
       walletAddress,
@@ -116,7 +161,7 @@ export async function processDeposit(req: AuthRequest, res: Response) {
     // Update wallet balance
     const wallet = await Wallet.findOneAndUpdate(
       { userId },
-      { $inc: { balance: verification.cccAmount } },
+      { $inc: { balance: cccAmount } },
       { upsert: true, new: true }
     );
 
@@ -126,7 +171,9 @@ export async function processDeposit(req: AuthRequest, res: Response) {
         id: transaction._id,
         type: transaction.type,
         amount: transaction.amount,
-        usdcAmount: transaction.usdcAmount,
+        cryptoAmount: transaction.cryptoAmount,
+        cryptoSymbol: transaction.cryptoSymbol,
+        priceUSD: transaction.priceUSD,
         status: transaction.status,
       },
       newBalance: wallet.balance,

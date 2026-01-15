@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
 import { AuthProvider } from "@/hooks/useAuth";
+import { CryptoPricesProvider } from "@/hooks/useCryptoPrices";
 import { FloatingChat } from "@/components";
 import Web3Provider from "@/context/Web3Provider";
 
@@ -36,8 +37,10 @@ export default async function RootLayout({
       >
         <Web3Provider cookies={cookies}>
           <AuthProvider>
-            {children}
-            <FloatingChat />
+            <CryptoPricesProvider>
+              {children}
+              <FloatingChat />
+            </CryptoPricesProvider>
           </AuthProvider>
         </Web3Provider>
       </body>
