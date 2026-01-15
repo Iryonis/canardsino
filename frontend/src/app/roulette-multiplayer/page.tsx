@@ -503,7 +503,7 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
   useEffect(() => {
     if (state.error) {
       const timer = setTimeout(() => {
-        setBetError(state.error);
+        setBetError(state.error || "");
         const clearTimer = setTimeout(() => setBetError(""), 5000);
         return () => clearTimeout(clearTimer);
       }, 0);
@@ -562,7 +562,7 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
 
             <BettingControls
               betAmount={betAmount}
-              onBetAmountChange={setBetAmount}
+              onBetAmountChange={(amount) => setBetAmount(typeof amount === 'string' ? parseFloat(amount) || 0 : amount)}
             />
 
             <BetErrorDisplay error={betError} />
