@@ -6,7 +6,8 @@ import { tokenManager } from '@/lib/tokenManager';
 import { StatsOverview, StatsDetails, RecentGamesTable } from './stats';
 import { PriceTicker } from './prices/PriceTicker';
 import { PortfolioValue } from './prices/PortfolioValue';
-import { useCryptoPrices } from '@/hooks/useCryptoPrices';
+import { CurrencySelector } from './prices/CurrencySelector';
+import { useCryptoPrices, Currency } from '@/hooks/useCryptoPrices';
 
 export interface SSEStats {
   userId: string;
@@ -31,8 +32,9 @@ interface StatsSSEDashboardProps {
 export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
   const [stats, setStats] = useState<SSEStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>('USD');
   const token = useMemo(() => tokenManager.getAccessToken(), []);
-  const { convertToUSD } = useCryptoPrices();
+  const { convertToCurrency, formatCurrency } = useCryptoPrices();
 
   useEffect(() => {
     if (!token) {
@@ -109,10 +111,11 @@ export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
   return (
     <div className="min-h-screen bg-blue-darkest">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Price Ticker */}
+        {/* Price Ticker & Currency Selector */}
         <div className="mb-6 p-4 bg-blue-dark/30 backdrop-blur border border-blue/50 rounded-lg">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-3">
             <h2 className="text-sm font-semibold text-blue-light uppercase tracking-wider">Live Crypto Prices</h2>
+            <CurrencySelector selected={selectedCurrency} onChange={setSelectedCurrency} />
           </div>
           <PriceTicker />
         </div>
@@ -153,27 +156,31 @@ export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
                   totalGames={stats.totalGames}
                   winRate={stats.winRate}
                   netResult={stats.netResult}
-                  netResultUSD={stats.netResultUSD ?? convertToUSD(stats.netResult)}
+                  convertedNetResult={formatCurrency(convertToCurrency(stats.netResult, selectedCurrency), selectedCurrency)}
                   biggestWin={stats.biggestWin}
-                  biggestWinUSD={convertToUSD(stats.biggestWin)}
+                  convertedBiggestWin={formatCurrency(convertToCurrency(stats.biggestWin, selectedCurrency), selectedCurrency)}
+                  currency={selectedCurrency}
                 />
 
                 {/* Detailed Stats */}
                 <StatsDetails
                   totalBets={stats.totalBets}
-                  totalBetsUSD={convertToUSD(stats.totalBets)}
+                  convertedTotalBets={formatCurrency(convertToCurrency(stats.totalBets, selectedCurrency), selectedCurrency)}
                   totalWins={stats.totalWins}
-                  totalWinsUSD={convertToUSD(stats.totalWins)}
+                  convertedTotalWins={formatCurrency(convertToCurrency(stats.totalWins, selectedCurrency), selectedCurrency)}
                   biggestLoss={stats.biggestLoss}
-                  biggestLossUSD={convertToUSD(Math.abs(stats.biggestLoss))}
+                  convertedBiggestLoss={formatCurrency(convertToCurrency(Math.abs(stats.biggestLoss), selectedCurrency), selectedCurrency)}
                   favoriteGame={stats.favoriteGame}
+                  currency={selectedCurrency}
                 />
 
                 {/* Recent Games */}
                 <RecentGamesTable
                   games={stats.recentGames}
                   allGames={stats.allGames}
-                  convertToUSD={convertToUSD}
+                  convertToCurrency={(ccc) => convertToCurrency(ccc, selectedCurrency)}
+                  formatCurrency={(val) => formatCurrency(val, selectedCurrency)}
+                  currency={selectedCurrency}
                 />
 
                 {/* Last Updated */}

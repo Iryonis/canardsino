@@ -3,7 +3,6 @@
 import { useAuth } from "../../hooks/useAuth";
 import { LoggedNav } from "./loggedNav";
 import { UnloggedNav } from "./unloggedNav";
-import { PriceTicker } from "../prices/PriceTicker";
 import Link from "next/link";
 
 export function Navbar({
@@ -48,11 +47,6 @@ export function Navbar({
           </div>
         </div>
       </nav>
-      <div className="bg-blue-darkest/80 border-b border-blue/30 py-2">
-        <div className="container mx-auto px-4">
-          <PriceTicker />
-        </div>
-      </div>
     </header>
   );
 }

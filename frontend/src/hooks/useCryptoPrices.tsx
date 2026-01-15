@@ -19,10 +19,14 @@ interface PricesState {
   lastUpdated: Date | null;
 }
 
+export type Currency = "USD" | "BTC" | "ETH" | "POL";
+
 interface PricesContextType extends PricesState {
   getPrice: (symbol: string) => number | null;
   getQuote: (symbol: string) => CryptoQuote | null;
   convertToUSD: (cccAmount: number) => number | null;
+  convertToCurrency: (cccAmount: number, currency: Currency) => number | null;
+  formatCurrency: (value: number | null, currency: Currency) => string;
   refresh: () => Promise<void>;
 }
 
@@ -95,6 +99,41 @@ export function CryptoPricesProvider({ children }: { children: ReactNode }) {
     [getPrice]
   );
 
+  const convertToCurrency = useCallback(
+    (cccAmount: number, currency: Currency): number | null => {
+      const usdValue = convertToUSD(cccAmount);
+      if (usdValue === null) return null;
+
+      if (currency === "USD") return usdValue;
+
+      const targetPrice = getPrice(currency);
+      if (targetPrice === null || targetPrice === 0) return null;
+
+      return usdValue / targetPrice;
+    },
+    [convertToUSD, getPrice]
+  );
+
+  const formatCurrency = useCallback(
+    (value: number | null, currency: Currency): string => {
+      if (value === null) return "-";
+
+      switch (currency) {
+        case "USD":
+          return `$${value.toFixed(2)}`;
+        case "BTC":
+          return `${value.toFixed(8)} BTC`;
+        case "ETH":
+          return `${value.toFixed(6)} ETH`;
+        case "POL":
+          return `${value.toFixed(4)} POL`;
+        default:
+          return value.toString();
+      }
+    },
+    []
+  );
+
   const refresh = useCallback(async () => {
     setState((prev) => ({ ...prev, isLoading: true }));
     await fetchPrices();
@@ -107,6 +146,8 @@ export function CryptoPricesProvider({ children }: { children: ReactNode }) {
         getPrice,
         getQuote,
         convertToUSD,
+        convertToCurrency,
+        formatCurrency,
         refresh,
       }}
     >

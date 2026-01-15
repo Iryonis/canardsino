@@ -3,21 +3,22 @@
 
 interface StatsDetailsProps {
   totalBets: number;
-  totalBetsUSD?: number | null;
+  convertedTotalBets?: string;
   totalWins: number;
-  totalWinsUSD?: number | null;
+  convertedTotalWins?: string;
   biggestLoss: number;
-  biggestLossUSD?: number | null;
+  convertedBiggestLoss?: string;
   favoriteGame: string;
+  currency?: string;
 }
 
 export default function StatsDetails({
   totalBets,
-  totalBetsUSD,
+  convertedTotalBets,
   totalWins,
-  totalWinsUSD,
+  convertedTotalWins,
   biggestLoss,
-  biggestLossUSD,
+  convertedBiggestLoss,
   favoriteGame,
 }: StatsDetailsProps) {
   const formatCCC = (amount: number) => amount.toLocaleString('en-US');
@@ -28,8 +29,8 @@ export default function StatsDetails({
       <div className="bg-blue-darkest/50 border border-blue/30 p-4 rounded-lg">
         <p className="font-semibold text-blue-light mb-2 text-sm uppercase tracking-wider">Total Bets</p>
         <p className="text-xl text-blue-lightest">{formatCCC(totalBets)} CCC</p>
-        {totalBetsUSD != null && (
-          <p className="text-sm text-blue-light/70">${totalBetsUSD.toFixed(2)} USD</p>
+        {convertedTotalBets && convertedTotalBets !== '-' && (
+          <p className="text-sm text-blue-light/70">{convertedTotalBets}</p>
         )}
       </div>
 
@@ -37,8 +38,8 @@ export default function StatsDetails({
       <div className="bg-blue-darkest/50 border border-blue/30 p-4 rounded-lg">
         <p className="font-semibold text-blue-light mb-2 text-sm uppercase tracking-wider">Total Wins</p>
         <p className="text-xl text-blue-lightest">{formatCCC(totalWins)} CCC</p>
-        {totalWinsUSD != null && (
-          <p className="text-sm text-blue-light/70">${totalWinsUSD.toFixed(2)} USD</p>
+        {convertedTotalWins && convertedTotalWins !== '-' && (
+          <p className="text-sm text-blue-light/70">{convertedTotalWins}</p>
         )}
       </div>
 
@@ -46,8 +47,8 @@ export default function StatsDetails({
       <div className="bg-blue-darkest/50 border border-blue/30 p-4 rounded-lg">
         <p className="font-semibold text-blue-light mb-2 text-sm uppercase tracking-wider">Biggest Loss</p>
         <p className="text-xl text-red-400">{formatCCC(Math.abs(biggestLoss))} CCC</p>
-        {biggestLossUSD != null && (
-          <p className="text-sm text-red-400/70">${biggestLossUSD.toFixed(2)} USD</p>
+        {convertedBiggestLoss && convertedBiggestLoss !== '-' && (
+          <p className="text-sm text-red-400/70">{convertedBiggestLoss}</p>
         )}
       </div>
 

@@ -28,20 +28,28 @@ interface RecentGame {
 interface RecentGamesTableProps {
   games: RecentGame[];
   allGames?: RecentGame[];
-  convertToUSD?: (ccc: number) => number | null;
+  convertToCurrency?: (ccc: number) => number | null;
+  formatCurrency?: (val: number | null) => string;
+  currency?: string;
 }
 
-export default function RecentGamesTable({ games, allGames = [], convertToUSD }: RecentGamesTableProps) {
+export default function RecentGamesTable({
+  games,
+  allGames = [],
+  convertToCurrency,
+  formatCurrency: formatCurrencyFn,
+}: RecentGamesTableProps) {
   const [showAll, setShowAll] = useState(false);
 
   const displayGames = showAll && allGames.length > 0 ? allGames : games;
   const hasMoreGames = allGames.length > games.length;
 
   const formatCCC = (amount: number) => amount.toLocaleString('en-US');
-  const formatUSD = (ccc: number) => {
-    if (!convertToUSD) return null;
-    const usd = convertToUSD(ccc);
-    return usd !== null ? `$${usd.toFixed(2)}` : null;
+  const formatConverted = (ccc: number) => {
+    if (!convertToCurrency || !formatCurrencyFn) return null;
+    const converted = convertToCurrency(ccc);
+    const formatted = formatCurrencyFn(converted);
+    return formatted !== '-' ? formatted : null;
   };
 
   return (
@@ -124,23 +132,23 @@ export default function RecentGamesTable({ games, allGames = [], convertToUSD }:
                 </td>
                 <td className="p-3 text-right">
                   <span className="text-blue-lightest">{formatCCC(game.totalBet)} CCC</span>
-                  {formatUSD(game.totalBet) && (
-                    <span className="block text-xs text-blue-light/70">{formatUSD(game.totalBet)}</span>
+                  {formatConverted(game.totalBet) && (
+                    <span className="block text-xs text-blue-light/70">{formatConverted(game.totalBet)}</span>
                   )}
                 </td>
                 <td className="p-3 text-right">
                   <span className="text-blue-lightest">{formatCCC(game.totalWin)} CCC</span>
-                  {formatUSD(game.totalWin) && (
-                    <span className="block text-xs text-blue-light/70">{formatUSD(game.totalWin)}</span>
+                  {formatConverted(game.totalWin) && (
+                    <span className="block text-xs text-blue-light/70">{formatConverted(game.totalWin)}</span>
                   )}
                 </td>
                 <td className={`p-3 text-right font-semibold ${
                   game.netResult >= 0 ? 'text-green-400' : 'text-red-400'
                 }`}>
                   <span>{game.netResult >= 0 ? '+' : ''}{formatCCC(game.netResult)} CCC</span>
-                  {formatUSD(game.netResult) && (
+                  {formatConverted(game.netResult) && (
                     <span className={`block text-xs ${game.netResult >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
-                      {game.netResult >= 0 ? '+' : ''}{formatUSD(game.netResult)}
+                      {game.netResult >= 0 ? '+' : ''}{formatConverted(game.netResult)}
                     </span>
                   )}
                 </td>
