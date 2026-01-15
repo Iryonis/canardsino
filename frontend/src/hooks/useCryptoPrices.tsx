@@ -67,7 +67,8 @@ export function CryptoPricesProvider({ children }: { children: ReactNode }) {
       const quote = state.quotes.find(
         (q) => q.symbol.toUpperCase() === symbol.toUpperCase()
       );
-      return quote?.price ?? null;
+      if (!quote) return null;
+      return quote.price;
     },
     [state.quotes]
   );

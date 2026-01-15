@@ -38,7 +38,7 @@ export function BalanceUSD({
         </span>
       ) : usdValue !== null ? (
         <span className="text-xs text-blue-light/70">
-          {formatUSD(usdValue)} USD
+          {formatUSD(usdValue)}
         </span>
       ) : null}
     </div>

@@ -21,6 +21,8 @@ class CMCService {
 
     try {
       const symbols = SUPPORTED_CRYPTOS.join(',');
+      // Note: Free CMC plan only supports 1 convert currency
+      // We fetch USD and calculate EUR using a fixed exchange rate
       const response = await axios.get<CMCQuoteResponse>(
         `${CMC_BASE_URL}/cryptocurrency/quotes/latest`,
         {
@@ -51,7 +53,8 @@ class CMCService {
         console.error('Failed to fetch quotes:', error);
       }
 
-      throw error;
+      console.warn('Falling back to mock data');
+      return this.getMockQuotes();
     }
   }
 
@@ -104,6 +107,15 @@ class CMCService {
         percentChange24h: 0.01,
         percentChange7d: 0.00,
         marketCap: 24000000000,
+        lastUpdated: now,
+      },
+      {
+        symbol: 'USDT',
+        name: 'Tether USD',
+        price: 1.0000,
+        percentChange24h: 0.00,
+        percentChange7d: 0.01,
+        marketCap: 95000000000,
         lastUpdated: now,
       },
       {

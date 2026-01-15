@@ -28,13 +28,21 @@ interface RecentGame {
 interface RecentGamesTableProps {
   games: RecentGame[];
   allGames?: RecentGame[];
+  convertToUSD?: (ccc: number) => number | null;
 }
 
-export default function RecentGamesTable({ games, allGames = [] }: RecentGamesTableProps) {
+export default function RecentGamesTable({ games, allGames = [], convertToUSD }: RecentGamesTableProps) {
   const [showAll, setShowAll] = useState(false);
-  
+
   const displayGames = showAll && allGames.length > 0 ? allGames : games;
   const hasMoreGames = allGames.length > games.length;
+
+  const formatCCC = (amount: number) => amount.toLocaleString('en-US');
+  const formatUSD = (ccc: number) => {
+    if (!convertToUSD) return null;
+    const usd = convertToUSD(ccc);
+    return usd !== null ? `$${usd.toFixed(2)}` : null;
+  };
 
   return (
     <div className="bg-blue-dark/30 backdrop-blur border border-blue/50 rounded-lg p-6">
@@ -114,12 +122,27 @@ export default function RecentGamesTable({ games, allGames = [] }: RecentGamesTa
                     <span className="text-blue-light">-</span>
                   )}
                 </td>
-                <td className="p-3 text-right text-blue-lightest">${game.totalBet.toFixed(2)}</td>
-                <td className="p-3 text-right text-blue-lightest">${game.totalWin.toFixed(2)}</td>
+                <td className="p-3 text-right">
+                  <span className="text-blue-lightest">{formatCCC(game.totalBet)} CCC</span>
+                  {formatUSD(game.totalBet) && (
+                    <span className="block text-xs text-blue-light/70">{formatUSD(game.totalBet)}</span>
+                  )}
+                </td>
+                <td className="p-3 text-right">
+                  <span className="text-blue-lightest">{formatCCC(game.totalWin)} CCC</span>
+                  {formatUSD(game.totalWin) && (
+                    <span className="block text-xs text-blue-light/70">{formatUSD(game.totalWin)}</span>
+                  )}
+                </td>
                 <td className={`p-3 text-right font-semibold ${
                   game.netResult >= 0 ? 'text-green-400' : 'text-red-400'
                 }`}>
-                  {game.netResult >= 0 ? '+' : ''}{game.netResult.toFixed(2)}
+                  <span>{game.netResult >= 0 ? '+' : ''}{formatCCC(game.netResult)} CCC</span>
+                  {formatUSD(game.netResult) && (
+                    <span className={`block text-xs ${game.netResult >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
+                      {game.netResult >= 0 ? '+' : ''}{formatUSD(game.netResult)}
+                    </span>
+                  )}
                 </td>
                 <td className="p-3 text-blue-light text-xs">
                   {new Date(game.createdAt).toLocaleString('en-US', {

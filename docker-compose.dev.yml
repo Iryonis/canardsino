@@ -249,7 +249,8 @@ services:
       - NODE_ENV=development
       - PORT=8007
       - CMC_API_KEY=${CMC_API_KEY}
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - CACHE_TTL=300
     volumes:
       - ./services/coinmarketcap/src:/app/src:cached
@@ -257,6 +258,7 @@ services:
       - /app/node_modules
     depends_on:
       - redis
+      - rabbitmq
     networks:
       - casino-network
     command: npm run dev

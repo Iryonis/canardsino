@@ -5,8 +5,9 @@ interface StatsOverviewProps {
   totalGames: number;
   winRate: number;
   netResult: number;
-  netResultUSD?: number;
+  netResultUSD?: number | null;
   biggestWin: number;
+  biggestWinUSD?: number | null;
 }
 
 export default function StatsOverview({
@@ -15,6 +16,7 @@ export default function StatsOverview({
   netResult,
   netResultUSD,
   biggestWin,
+  biggestWinUSD,
 }: StatsOverviewProps) {
   const formatCCC = (amount: number) => amount.toLocaleString('en-US');
 
@@ -38,7 +40,7 @@ export default function StatsOverview({
         <p className={`text-3xl font-bold ${netResult >= 0 ? 'text-green-400' : 'text-red-400'}`}>
           {formatCCC(netResult)} CCC
         </p>
-        {netResultUSD !== undefined && (
+        {netResultUSD != null && (
           <p className={`text-sm mt-1 ${netResult >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
             ${netResultUSD.toFixed(2)} USD
           </p>
@@ -49,6 +51,11 @@ export default function StatsOverview({
       <div className="bg-blue-dark/50 backdrop-blur border border-blue p-6 rounded-lg">
         <p className="text-blue-light text-sm uppercase tracking-wider mb-2">Biggest Win</p>
         <p className="text-3xl font-bold text-green-400">{formatCCC(biggestWin)} CCC</p>
+        {biggestWinUSD != null && (
+          <p className="text-sm mt-1 text-green-400/70">
+            ${biggestWinUSD.toFixed(2)} USD
+          </p>
+        )}
       </div>
     </div>
   );

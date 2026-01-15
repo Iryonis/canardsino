@@ -4,6 +4,9 @@
 import { useEffect, useState, useMemo } from 'react';
 import { tokenManager } from '@/lib/tokenManager';
 import { StatsOverview, StatsDetails, RecentGamesTable } from './stats';
+import { PriceTicker } from './prices/PriceTicker';
+import { PortfolioValue } from './prices/PortfolioValue';
+import { useCryptoPrices } from '@/hooks/useCryptoPrices';
 
 export interface SSEStats {
   userId: string;
@@ -29,6 +32,7 @@ export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
   const [stats, setStats] = useState<SSEStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const token = useMemo(() => tokenManager.getAccessToken(), []);
+  const { convertToUSD } = useCryptoPrices();
 
   useEffect(() => {
     if (!token) {
@@ -105,6 +109,14 @@ export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
   return (
     <div className="min-h-screen bg-blue-darkest">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Price Ticker */}
+        <div className="mb-6 p-4 bg-blue-dark/30 backdrop-blur border border-blue/50 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-blue-light uppercase tracking-wider">Live Crypto Prices</h2>
+          </div>
+          <PriceTicker />
+        </div>
+
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-light to-blue-lightest mb-2">
             Statistics Dashboard
@@ -133,27 +145,35 @@ export default function StatsSSEDashboard({ userId }: StatsSSEDashboardProps) {
             {/* Stats Display */}
             {stats ? (
               <div className="space-y-6">
+                {/* Portfolio Value */}
+                <PortfolioValue balanceCCC={stats.netResult > 0 ? stats.netResult : 0} />
+
                 {/* Overview */}
                 <StatsOverview
                   totalGames={stats.totalGames}
                   winRate={stats.winRate}
                   netResult={stats.netResult}
-                  netResultUSD={stats.netResultUSD}
+                  netResultUSD={stats.netResultUSD ?? convertToUSD(stats.netResult)}
                   biggestWin={stats.biggestWin}
+                  biggestWinUSD={convertToUSD(stats.biggestWin)}
                 />
 
                 {/* Detailed Stats */}
                 <StatsDetails
                   totalBets={stats.totalBets}
+                  totalBetsUSD={convertToUSD(stats.totalBets)}
                   totalWins={stats.totalWins}
+                  totalWinsUSD={convertToUSD(stats.totalWins)}
                   biggestLoss={stats.biggestLoss}
+                  biggestLossUSD={convertToUSD(Math.abs(stats.biggestLoss))}
                   favoriteGame={stats.favoriteGame}
                 />
 
                 {/* Recent Games */}
-                <RecentGamesTable 
-                  games={stats.recentGames} 
+                <RecentGamesTable
+                  games={stats.recentGames}
                   allGames={stats.allGames}
+                  convertToUSD={convertToUSD}
                 />
 
                 {/* Last Updated */}
