@@ -1,6 +1,7 @@
 /**
  * WebSocket hook for Duck Race multiplayer game
  * Manages WebSocket connection, reconnection, and message handling
+ * Supports lobby-based room system
  */
 
 import { useEffect, useRef, useCallback, useState } from "react";
@@ -17,23 +18,59 @@ export interface DuckPlayer {
   userId: string;
   username: string;
   hasBet: boolean;
+  isReady: boolean;
   position: number;
   lane: number;
   color: DuckColor;
   isConnected: boolean;
 }
 
+// Room info for lobby
+export interface RoomInfo {
+  roomId: string;
+  roomName: string;
+  creatorId: string;
+  creatorUsername: string;
+  betAmount: number;
+  playerCount: number;
+  maxPlayers: number;
+  isPersistent: boolean;
+  phase: DuckRacePhase;
+  readyCount: number;
+}
+
 // Server message payloads
+export interface RoomListPayload {
+  rooms: RoomInfo[];
+  yourBalance?: number;
+}
+
+export interface RoomCreatedPayload {
+  room: RoomInfo;
+}
+
+export interface RoomUpdatedPayload {
+  room: RoomInfo;
+}
+
+export interface RoomDeletedPayload {
+  roomId: string;
+}
+
 export interface RaceStatePayload {
   roomId: string;
+  roomName: string;
   roundId: string;
   phase: DuckRacePhase;
   timeRemaining: number;
   betAmount: number;
   totalPot: number;
+  creatorId: string;
+  creatorUsername: string;
+  isPersistent: boolean;
   players: DuckPlayer[];
   yourBalance: number;
-  yourHasBet: boolean;
+  yourIsReady: boolean;
   yourLane?: number;
 }
 
@@ -43,6 +80,7 @@ export interface DuckPlayerJoinedPayload {
   lane: number;
   color: DuckColor;
   playerCount: number;
+  isReady: boolean;
 }
 
 export interface DuckPlayerLeftPayload {
@@ -52,24 +90,16 @@ export interface DuckPlayerLeftPayload {
   refunded?: boolean;
 }
 
-export interface DuckBetPlacedPayload {
+export interface PlayerReadyPayload {
   userId: string;
   username: string;
-  betAmount: number;
-  totalPot: number;
-  playersWithBets: number;
-  newBalance?: number;
+  isReady: boolean;
+  readyCount: number;
+  totalPlayers: number;
 }
 
-export interface DuckBettingStartedPayload {
-  roundId: string;
-  phase: "betting";
-  betAmount: number;
-  timeRemaining: number;
-  triggeredBy: {
-    userId: string;
-    username: string;
-  };
+export interface AllReadyPayload {
+  message: string;
 }
 
 export interface CountdownTickPayload {
@@ -146,11 +176,15 @@ export interface DuckErrorPayload {
 
 // Server message union type
 export type DuckRaceServerMessage =
+  | { type: "ROOM_LIST"; payload: RoomListPayload; timestamp: number }
+  | { type: "ROOM_CREATED"; payload: RoomCreatedPayload; timestamp: number }
+  | { type: "ROOM_UPDATED"; payload: RoomUpdatedPayload; timestamp: number }
+  | { type: "ROOM_DELETED"; payload: RoomDeletedPayload; timestamp: number }
   | { type: "RACE_STATE"; payload: RaceStatePayload; timestamp: number }
   | { type: "PLAYER_JOINED"; payload: DuckPlayerJoinedPayload; timestamp: number }
   | { type: "PLAYER_LEFT"; payload: DuckPlayerLeftPayload; timestamp: number }
-  | { type: "BET_PLACED"; payload: DuckBetPlacedPayload; timestamp: number }
-  | { type: "BETTING_STARTED"; payload: DuckBettingStartedPayload; timestamp: number }
+  | { type: "PLAYER_READY"; payload: PlayerReadyPayload; timestamp: number }
+  | { type: "ALL_READY"; payload: AllReadyPayload; timestamp: number }
   | { type: "COUNTDOWN_TICK"; payload: CountdownTickPayload; timestamp: number }
   | { type: "RACE_STARTED"; payload: RaceStartedPayload; timestamp: number }
   | { type: "RACE_UPDATE"; payload: RaceUpdatePayload; timestamp: number }
@@ -162,18 +196,24 @@ export type DuckRaceServerMessage =
 
 // Client message types
 export type DuckRaceClientMessage =
-  | { type: "JOIN_RACE"; payload?: { roomId?: string } }
-  | { type: "LEAVE_RACE"; payload?: { roomId?: string } }
-  | { type: "PLACE_BET"; payload: { amount: number } }
+  | { type: "GET_ROOMS" }
+  | { type: "CREATE_ROOM"; payload: { betAmount: number; isPersistent: boolean; roomName?: string } }
+  | { type: "JOIN_ROOM"; payload: { roomId: string } }
+  | { type: "LEAVE_ROOM" }
+  | { type: "SET_READY"; payload: { isReady: boolean } }
   | { type: "PING" };
 
 // Hook options
 export interface UseDuckRaceWebSocketOptions {
+  onRoomList?: (payload: RoomListPayload) => void;
+  onRoomCreated?: (payload: RoomCreatedPayload) => void;
+  onRoomUpdated?: (payload: RoomUpdatedPayload) => void;
+  onRoomDeleted?: (payload: RoomDeletedPayload) => void;
   onRaceState?: (payload: RaceStatePayload) => void;
   onPlayerJoined?: (payload: DuckPlayerJoinedPayload) => void;
   onPlayerLeft?: (payload: DuckPlayerLeftPayload) => void;
-  onBetPlaced?: (payload: DuckBetPlacedPayload) => void;
-  onBettingStarted?: (payload: DuckBettingStartedPayload) => void;
+  onPlayerReady?: (payload: PlayerReadyPayload) => void;
+  onAllReady?: (payload: AllReadyPayload) => void;
   onCountdownTick?: (payload: CountdownTickPayload) => void;
   onRaceStarted?: (payload: RaceStartedPayload) => void;
   onRaceUpdate?: (payload: RaceUpdatePayload) => void;
@@ -189,9 +229,11 @@ export interface UseDuckRaceWebSocketReturn {
   isConnected: boolean;
   connect: () => void;
   disconnect: () => void;
-  placeBet: (amount: number) => void;
-  joinRace: (roomId?: string) => void;
-  leaveRace: () => void;
+  getRooms: () => void;
+  createRoom: (betAmount: number, isPersistent: boolean, roomName?: string) => void;
+  joinRoom: (roomId: string) => void;
+  leaveRoom: () => void;
+  setReady: (isReady: boolean) => void;
 }
 
 const WS_URL = typeof window !== "undefined"
@@ -240,6 +282,18 @@ export function useDuckRaceWebSocket(
       const opts = optionsRef.current;
 
       switch (message.type) {
+        case "ROOM_LIST":
+          opts.onRoomList?.(message.payload);
+          break;
+        case "ROOM_CREATED":
+          opts.onRoomCreated?.(message.payload);
+          break;
+        case "ROOM_UPDATED":
+          opts.onRoomUpdated?.(message.payload);
+          break;
+        case "ROOM_DELETED":
+          opts.onRoomDeleted?.(message.payload);
+          break;
         case "RACE_STATE":
           opts.onRaceState?.(message.payload);
           break;
@@ -249,11 +303,11 @@ export function useDuckRaceWebSocket(
         case "PLAYER_LEFT":
           opts.onPlayerLeft?.(message.payload);
           break;
-        case "BET_PLACED":
-          opts.onBetPlaced?.(message.payload);
+        case "PLAYER_READY":
+          opts.onPlayerReady?.(message.payload);
           break;
-        case "BETTING_STARTED":
-          opts.onBettingStarted?.(message.payload);
+        case "ALL_READY":
+          opts.onAllReady?.(message.payload);
           break;
         case "COUNTDOWN_TICK":
           opts.onCountdownTick?.(message.payload);
@@ -363,22 +417,33 @@ export function useDuckRaceWebSocket(
     setIsConnected(false);
   }, [clearTimers]);
 
-  const placeBet = useCallback((amount: number) => {
+  const getRooms = useCallback(() => {
+    sendMessage({ type: "GET_ROOMS" });
+  }, [sendMessage]);
+
+  const createRoom = useCallback((betAmount: number, isPersistent: boolean, roomName?: string) => {
     sendMessage({
-      type: "PLACE_BET",
-      payload: { amount },
+      type: "CREATE_ROOM",
+      payload: { betAmount, isPersistent, roomName },
     });
   }, [sendMessage]);
 
-  const joinRace = useCallback((roomId?: string) => {
+  const joinRoom = useCallback((roomId: string) => {
     sendMessage({
-      type: "JOIN_RACE",
-      payload: roomId ? { roomId } : undefined,
+      type: "JOIN_ROOM",
+      payload: { roomId },
     });
   }, [sendMessage]);
 
-  const leaveRace = useCallback(() => {
-    sendMessage({ type: "LEAVE_RACE" });
+  const leaveRoom = useCallback(() => {
+    sendMessage({ type: "LEAVE_ROOM" });
+  }, [sendMessage]);
+
+  const setReady = useCallback((isReady: boolean) => {
+    sendMessage({
+      type: "SET_READY",
+      payload: { isReady },
+    });
   }, [sendMessage]);
 
   // Cleanup on unmount
@@ -392,8 +457,10 @@ export function useDuckRaceWebSocket(
     isConnected,
     connect,
     disconnect,
-    placeBet,
-    joinRace,
-    leaveRace,
+    getRooms,
+    createRoom,
+    joinRoom,
+    leaveRoom,
+    setReady,
   };
 }

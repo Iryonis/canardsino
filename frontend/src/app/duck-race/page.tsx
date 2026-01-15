@@ -1,17 +1,18 @@
 /**
  * Duck Race game page component
- * Multiplayer duck racing with WebSocket synchronization
+ * Multiplayer duck racing with room-based lobbies
  */
 
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Navbar } from "@/components/navbar/navbar";
 import { RaceTrack } from "@/components/duck-race";
 import {
   DuckRaceProvider,
   useDuckRace,
   type DuckRacePhase,
+  type RoomInfo,
 } from "@/contexts/DuckRaceContext";
 
 // Game configuration
@@ -32,24 +33,13 @@ function formatTime(seconds: number): string {
 /**
  * Get phase display text and color
  */
-function getPhaseDisplay(
-  phase: DuckRacePhase,
-  triggeredBy?: { username: string } | null
-): { text: string; subtext?: string; color: string } {
+function getPhaseDisplay(phase: DuckRacePhase): { text: string; subtext?: string; color: string } {
   switch (phase) {
     case "waiting":
       return {
         text: "Waiting for Players",
-        subtext: "Be the first to bet and set the race amount!",
+        subtext: "All players must be ready to start!",
         color: "text-blue-light",
-      };
-    case "betting":
-      return {
-        text: "Place Your Bets!",
-        subtext: triggeredBy
-          ? `${triggeredBy.username} set the race amount`
-          : undefined,
-        color: "text-green-400",
       };
     case "countdown":
       return {
@@ -73,7 +63,293 @@ function getPhaseDisplay(
 }
 
 /**
- * Players panel showing all participants
+ * Create Room Modal
+ */
+function CreateRoomModal({
+  isOpen,
+  onClose,
+  balance,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  balance: number;
+}) {
+  const { createRoom } = useDuckRace();
+  const [betAmount, setBetAmount] = useState(DUCK_RACE_CONFIG.MIN_BET);
+  const [isPersistent, setIsPersistent] = useState(false);
+  const [roomName, setRoomName] = useState("");
+  const [error, setError] = useState("");
+
+  const handleCreate = useCallback(() => {
+    if (betAmount < DUCK_RACE_CONFIG.MIN_BET) {
+      setError(`Minimum bet is ${DUCK_RACE_CONFIG.MIN_BET} CCC`);
+      return;
+    }
+    if (betAmount > balance) {
+      setError("Insufficient balance");
+      return;
+    }
+    createRoom(betAmount, isPersistent, roomName || undefined);
+    onClose();
+  }, [betAmount, balance, isPersistent, roomName, createRoom, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+      <div className="bg-blue-dark border border-blue rounded-lg p-6 max-w-md w-full mx-4">
+        <h2 className="text-2xl font-bold text-blue-lightest mb-4">Create Race Room</h2>
+
+        {/* Room Name */}
+        <div className="mb-4">
+          <label className="block text-sm text-blue-light mb-2">Room Name (optional)</label>
+          <input
+            type="text"
+            value={roomName}
+            onChange={(e) => setRoomName(e.target.value)}
+            placeholder="My Race Room"
+            className="w-full px-4 py-2 bg-blue-darkest border border-blue rounded-lg text-blue-lightest focus:border-blue-light focus:outline-none"
+          />
+        </div>
+
+        {/* Bet Amount */}
+        <div className="mb-4">
+          <label className="block text-sm text-blue-light mb-2">Bet Amount (CCC)</label>
+          <input
+            type="number"
+            value={betAmount}
+            onChange={(e) => setBetAmount(Number(e.target.value))}
+            min={DUCK_RACE_CONFIG.MIN_BET}
+            step={1000}
+            className="w-full px-4 py-3 bg-blue-darkest border border-blue rounded-lg text-blue-lightest font-mono text-lg focus:border-blue-light focus:outline-none"
+          />
+          <p className="text-xs text-blue-light/60 mt-1">
+            Minimum: {DUCK_RACE_CONFIG.MIN_BET.toLocaleString()} CCC
+          </p>
+        </div>
+
+        {/* Quick bet buttons */}
+        <div className="grid grid-cols-4 gap-2 mb-4">
+          {[2000, 5000, 10000, 50000].map((amount) => (
+            <button
+              key={amount}
+              onClick={() => setBetAmount(amount)}
+              className={`px-2 py-2 rounded text-sm font-medium transition ${
+                betAmount === amount
+                  ? "bg-blue-light text-blue-darkest"
+                  : "bg-blue-darkest border border-blue text-blue-light hover:bg-blue-dark"
+              }`}
+            >
+              {(amount / 1000).toFixed(0)}K
+            </button>
+          ))}
+        </div>
+
+        {/* Persistence toggle */}
+        <div className="mb-4">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isPersistent}
+              onChange={(e) => setIsPersistent(e.target.checked)}
+              className="w-5 h-5 rounded border-blue bg-blue-darkest"
+            />
+            <div>
+              <span className="text-blue-lightest">Multi-race room</span>
+              <p className="text-xs text-blue-light/60">
+                Room stays open for multiple races
+              </p>
+            </div>
+          </label>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-900/30 border border-red-500/50 rounded-lg text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* Balance */}
+        <div className="mb-4 p-3 bg-blue-darkest rounded-lg">
+          <div className="flex justify-between text-sm">
+            <span className="text-blue-light">Your Balance:</span>
+            <span className="text-blue-lightest font-mono">
+              {balance.toLocaleString()} CCC
+            </span>
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 rounded-lg font-bold bg-blue-dark border border-blue text-blue-light hover:bg-blue-darkest transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleCreate}
+            className="flex-1 py-3 rounded-lg font-bold bg-green-600 hover:bg-green-700 text-white transition"
+          >
+            Create Room
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Room Card for lobby display
+ */
+function RoomCard({ room }: { room: RoomInfo }) {
+  const { joinRoom, state } = useDuckRace();
+  const canJoin = state.yourBalance >= room.betAmount;
+
+  return (
+    <div className="bg-blue-dark/30 border border-blue rounded-lg p-4 hover:border-blue-light transition">
+      <div className="flex justify-between items-start mb-3">
+        <div>
+          <h3 className="text-lg font-bold text-blue-lightest">{room.roomName}</h3>
+          <p className="text-sm text-blue-light/70">by {room.creatorUsername}</p>
+        </div>
+        {room.isPersistent && (
+          <span className="px-2 py-1 bg-yellow-900/30 text-yellow-400 text-xs rounded">
+            Multi-race
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+        <div>
+          <span className="text-blue-light/70">Bet Amount:</span>
+          <p className="text-yellow-400 font-mono font-bold">
+            {room.betAmount.toLocaleString()} CCC
+          </p>
+        </div>
+        <div>
+          <span className="text-blue-light/70">Players:</span>
+          <p className="text-blue-lightest">
+            {room.playerCount}/{room.maxPlayers}
+            <span className="text-green-400 ml-2">({room.readyCount} ready)</span>
+          </p>
+        </div>
+      </div>
+
+      <button
+        onClick={() => joinRoom(room.roomId)}
+        disabled={!canJoin}
+        className={`w-full py-2 rounded-lg font-bold transition ${
+          canJoin
+            ? "bg-green-600 hover:bg-green-700 text-white"
+            : "bg-gray-600 text-gray-400 cursor-not-allowed"
+        }`}
+      >
+        {canJoin ? "Join Room" : `Need ${room.betAmount.toLocaleString()} CCC`}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Lobby view showing available rooms
+ */
+function LobbyView() {
+  const { state, getRooms } = useDuckRace();
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  return (
+    <div className="min-h-screen bg-blue-darkest">
+      <Navbar balance={state.yourBalance} currentPage="Duck Race" />
+
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-blue-lightest mb-2 flex items-center justify-center gap-3">
+            <span className="text-5xl">🦆</span>
+            Duck Race Lobby
+            <span className="text-5xl">🦆</span>
+          </h1>
+          <p className="text-blue-light">Join a room or create your own race!</p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-center gap-4 mb-8">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition"
+          >
+            Create Room
+          </button>
+          <button
+            onClick={getRooms}
+            className="px-6 py-3 bg-blue-dark border border-blue hover:border-blue-light text-blue-light font-bold rounded-lg transition"
+          >
+            Refresh
+          </button>
+        </div>
+
+        {/* Room List */}
+        {state.rooms.length > 0 ? (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {state.rooms.map((room) => (
+              <RoomCard key={room.roomId} room={room} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-16">
+            <div className="text-6xl mb-4">🦆</div>
+            <h2 className="text-2xl font-bold text-blue-lightest mb-2">No Rooms Available</h2>
+            <p className="text-blue-light mb-6">Be the first to create a race!</p>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-8 py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-lg transition"
+            >
+              Create First Room
+            </button>
+          </div>
+        )}
+
+        {/* How to Play */}
+        <div className="mt-12 bg-blue-dark/30 border border-blue rounded-lg p-6 max-w-2xl mx-auto">
+          <h3 className="text-xl font-bold text-blue-lightest mb-4">How to Play</h3>
+          <ul className="space-y-3 text-blue-light">
+            <li className="flex items-start gap-3">
+              <span className="text-green-400 font-bold">1.</span>
+              Create a room and set your bet amount, or join an existing room
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="text-green-400 font-bold">2.</span>
+              Wait for at least 2 players (max 5)
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="text-green-400 font-bold">3.</span>
+              All players must click &quot;Ready&quot; to start the race
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="text-green-400 font-bold">4.</span>
+              Ducks race based on random numbers - first to finish wins!
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="text-yellow-400">🏆</span>
+              Winner takes the entire pot!
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <CreateRoomModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        balance={state.yourBalance}
+      />
+    </div>
+  );
+}
+
+/**
+ * Players panel showing all participants with ready status
  */
 function PlayersPanel() {
   const { state } = useDuckRace();
@@ -83,6 +359,11 @@ function PlayersPanel() {
       <h3 className="text-blue-light font-semibold mb-3 flex items-center gap-2">
         <span className="text-2xl">🦆</span>
         Players ({state.playerCount}/{DUCK_RACE_CONFIG.MAX_PLAYERS})
+        {state.isWaiting && (
+          <span className="text-sm text-green-400 ml-auto">
+            {state.readyCount}/{state.playerCount} ready
+          </span>
+        )}
       </h3>
       <div className="space-y-2">
         {state.players.map((player) => (
@@ -92,19 +373,35 @@ function PlayersPanel() {
               player.isConnected
                 ? "bg-blue-dark/50"
                 : "bg-gray-700/50 opacity-60"
-            } ${player.hasBet ? "border-l-4 border-green-500" : ""}`}
+            } ${player.isReady ? "border-l-4 border-green-500" : ""}`}
           >
             <div className="flex items-center gap-2">
               <span
                 className={`w-3 h-3 rounded-full ${
-                  player.hasBet ? "bg-green-500" : "bg-gray-500"
+                  player.isReady ? "bg-green-500" : "bg-gray-500"
                 }`}
               ></span>
               <span className="text-blue-lightest truncate max-w-24">
                 {player.username}
               </span>
+              {player.userId === state.creatorId && (
+                <span className="text-yellow-400 text-xs">👑</span>
+              )}
             </div>
-            <span className="text-sm text-blue-light">Lane {player.lane}</span>
+            <div className="flex items-center gap-2">
+              {state.isWaiting && (
+                <span
+                  className={`text-xs px-2 py-0.5 rounded ${
+                    player.isReady
+                      ? "bg-green-600/30 text-green-400"
+                      : "bg-gray-600/30 text-gray-400"
+                  }`}
+                >
+                  {player.isReady ? "Ready" : "Not Ready"}
+                </span>
+              )}
+              <span className="text-sm text-blue-light">Lane {player.lane}</span>
+            </div>
           </div>
         ))}
         {state.players.length === 0 && (
@@ -124,81 +421,53 @@ function PlayersPanel() {
 }
 
 /**
- * Betting panel for placing bets
+ * Ready panel for setting ready status
  */
-function BettingPanel() {
-  const { state, placeBet } = useDuckRace();
-  const [betAmount, setBetAmount] = useState(DUCK_RACE_CONFIG.MIN_BET);
+function ReadyPanel() {
+  const { state, setReady, leaveRoom } = useDuckRace();
   const [error, setError] = useState("");
 
-  // Update bet amount when betting phase starts (must match room amount)
-  useEffect(() => {
-    if (state.betAmount > 0) {
-      setBetAmount(state.betAmount);
-    }
-  }, [state.betAmount]);
-
-  const handlePlaceBet = useCallback(() => {
-    if (state.yourHasBet) {
-      setError("You already placed a bet");
+  const handleReady = useCallback(() => {
+    if (state.yourBalance < state.betAmount) {
+      setError(`Need ${state.betAmount} CCC to participate`);
       setTimeout(() => setError(""), 3000);
       return;
     }
+    setReady(!state.yourIsReady);
+  }, [state.yourIsReady, state.yourBalance, state.betAmount, setReady]);
 
-    if (!state.canBet) {
-      setError("Cannot place bets now");
-      setTimeout(() => setError(""), 3000);
-      return;
-    }
-
-    if (betAmount < DUCK_RACE_CONFIG.MIN_BET) {
-      setError(`Minimum bet is ${DUCK_RACE_CONFIG.MIN_BET} CCC`);
-      setTimeout(() => setError(""), 3000);
-      return;
-    }
-
-    if (betAmount > state.yourBalance) {
-      setError("Insufficient balance");
-      setTimeout(() => setError(""), 3000);
-      return;
-    }
-
-    // If betting phase already started, must match the bet amount
-    if (state.phase === "betting" && state.betAmount > 0 && betAmount !== state.betAmount) {
-      setError(`Must bet exactly ${state.betAmount} CCC to join this race`);
-      setTimeout(() => setError(""), 3000);
-      return;
-    }
-
-    placeBet(betAmount);
-  }, [state, betAmount, placeBet]);
-
-  // Handle error from context
-  useEffect(() => {
-    if (state.error) {
-      setError(state.error);
-      setTimeout(() => setError(""), 5000);
-    }
-  }, [state.error]);
-
-  const canPlaceBet =
-    state.canBet &&
-    !state.yourHasBet &&
-    state.players.length < DUCK_RACE_CONFIG.MAX_PLAYERS;
-  const mustMatchBet = state.phase === "betting" && state.betAmount > 0;
+  const canStart =
+    state.playerCount >= DUCK_RACE_CONFIG.MIN_PLAYERS &&
+    state.readyCount === state.playerCount;
 
   return (
     <div className="bg-blue-dark/30 border border-blue rounded-lg p-4">
-      <h3 className="text-blue-light font-semibold mb-3">Place Your Bet</h3>
+      <h3 className="text-blue-light font-semibold mb-3">Room Info</h3>
 
-      {/* Balance display */}
-      <div className="mb-4 p-3 bg-blue-dark/50 rounded-lg">
+      {/* Room details */}
+      <div className="mb-4 space-y-2">
+        <div className="flex justify-between text-sm">
+          <span className="text-blue-light">Room:</span>
+          <span className="text-blue-lightest">{state.roomName}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-blue-light">Bet Amount:</span>
+          <span className="text-yellow-400 font-mono font-bold">
+            {state.betAmount.toLocaleString()} CCC
+          </span>
+        </div>
         <div className="flex justify-between text-sm">
           <span className="text-blue-light">Your Balance:</span>
           <span className="text-blue-lightest font-mono">
             {state.yourBalance.toLocaleString()} CCC
           </span>
         </div>
+        {state.isPersistent && (
+          <div className="flex justify-between text-sm">
+            <span className="text-blue-light">Type:</span>
+            <span className="text-yellow-400">Multi-race room</span>
+          </div>
+        )}
       </div>
 
       {/* Pot display */}
@@ -216,45 +485,6 @@ function BettingPanel() {
         </div>
       )}
 
-      {/* Bet amount input */}
-      <div className="mb-4">
-        <label className="block text-sm text-blue-light mb-2">
-          {mustMatchBet ? "Race Amount (fixed)" : "Bet Amount (CCC)"}
-        </label>
-        <input
-          type="number"
-          value={betAmount}
-          onChange={(e) => setBetAmount(Number(e.target.value))}
-          min={DUCK_RACE_CONFIG.MIN_BET}
-          step={1000}
-          disabled={!canPlaceBet || mustMatchBet}
-          className="w-full px-4 py-3 bg-blue-dark border border-blue rounded-lg text-blue-lightest font-mono text-lg focus:border-blue-light focus:outline-none disabled:opacity-50"
-        />
-        <p className="text-xs text-blue-light/60 mt-1">
-          Minimum: {DUCK_RACE_CONFIG.MIN_BET.toLocaleString()} CCC
-        </p>
-      </div>
-
-      {/* Quick bet buttons */}
-      {!mustMatchBet && (
-        <div className="grid grid-cols-4 gap-2 mb-4">
-          {[2000, 5000, 10000, 50000].map((amount) => (
-            <button
-              key={amount}
-              onClick={() => setBetAmount(amount)}
-              disabled={!canPlaceBet}
-              className={`px-2 py-2 rounded text-sm font-medium transition ${
-                betAmount === amount
-                  ? "bg-blue-light text-blue-darkest"
-                  : "bg-blue-dark/50 text-blue-light hover:bg-blue-dark"
-              } disabled:opacity-50`}
-            >
-              {(amount / 1000).toFixed(0)}K
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Error display */}
       {error && (
         <div className="mb-4 p-3 bg-red-900/30 border border-red-500/50 rounded-lg text-red-400 text-sm">
@@ -262,38 +492,54 @@ function BettingPanel() {
         </div>
       )}
 
-      {/* Bet button */}
-      {state.yourHasBet ? (
-        <div className="w-full py-3 bg-green-600/30 border border-green-500 text-green-400 text-center rounded-lg font-bold">
-          Bet Placed - Lane {state.yourLane}
-        </div>
-      ) : (
-        <button
-          onClick={handlePlaceBet}
-          disabled={!canPlaceBet}
-          className={`w-full py-3 rounded-lg font-bold text-lg transition ${
-            canPlaceBet
-              ? "bg-green-600 hover:bg-green-700 text-white"
-              : "bg-gray-600 text-gray-400 cursor-not-allowed"
-          }`}
-        >
-          {state.phase === "waiting"
-            ? `Start Race (${betAmount.toLocaleString()} CCC)`
-            : `Join Race (${betAmount.toLocaleString()} CCC)`}
-        </button>
+      {/* Ready button */}
+      {state.isWaiting && (
+        <>
+          <button
+            onClick={handleReady}
+            className={`w-full py-3 rounded-lg font-bold text-lg transition mb-3 ${
+              state.yourIsReady
+                ? "bg-yellow-600 hover:bg-yellow-700 text-white"
+                : "bg-green-600 hover:bg-green-700 text-white"
+            }`}
+          >
+            {state.yourIsReady ? "Cancel Ready" : "Ready!"}
+          </button>
+
+          {/* Status message */}
+          {state.yourIsReady ? (
+            <p className="text-center text-green-400 text-sm">
+              Waiting for other players to ready up...
+            </p>
+          ) : (
+            <p className="text-center text-blue-light text-sm">
+              Click Ready when you&apos;re prepared to race!
+            </p>
+          )}
+
+          {canStart && (
+            <p className="text-center text-yellow-400 text-sm mt-2 animate-pulse">
+              All players ready! Race starting soon...
+            </p>
+          )}
+        </>
       )}
 
-      {/* Status messages */}
-      {state.phase === "waiting" && !state.yourHasBet && (
-        <p className="text-center text-green-400 text-sm mt-3">
-          Set the race bet amount!
-        </p>
+      {/* Lane info */}
+      {state.yourLane && (
+        <div className="mt-4 p-3 bg-blue-dark/50 rounded-lg text-center">
+          <span className="text-blue-light">Your Lane:</span>
+          <span className="text-blue-lightest font-bold ml-2">{state.yourLane}</span>
+        </div>
       )}
-      {state.phase === "betting" && !state.yourHasBet && (
-        <p className="text-center text-yellow-400 text-sm mt-3">
-          Hurry! Betting closes soon.
-        </p>
-      )}
+
+      {/* Leave button */}
+      <button
+        onClick={leaveRoom}
+        className="w-full mt-4 py-2 rounded-lg font-bold bg-red-600/30 border border-red-500/50 text-red-400 hover:bg-red-600/50 transition"
+      >
+        Leave Room
+      </button>
     </div>
   );
 }
@@ -376,6 +622,13 @@ function ResultsPanel() {
           </div>
         </div>
       )}
+
+      {/* Next race info */}
+      {state.isPersistent && (
+        <p className="text-center text-blue-light text-sm">
+          Next race in {state.timeRemaining}s...
+        </p>
+      )}
     </div>
   );
 }
@@ -452,16 +705,15 @@ function ConnectionStatus() {
 }
 
 /**
- * Main Duck Race game content
+ * Room view - the actual game room
  */
-function DuckRaceContent() {
+function RoomView() {
   const { state } = useDuckRace();
 
-  const phaseDisplay = getPhaseDisplay(state.phase, state.bettingTriggeredBy);
+  const phaseDisplay = getPhaseDisplay(state.phase);
 
   return (
     <div className="min-h-screen bg-blue-darkest">
-      <ConnectionStatus />
       <CountdownOverlay />
 
       {/* Header */}
@@ -472,7 +724,7 @@ function DuckRaceContent() {
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-blue-lightest mb-2 flex items-center justify-center gap-3">
             <span className="text-5xl">🦆</span>
-            Duck Race
+            {state.roomName}
             <span className="text-5xl">🦆</span>
           </h1>
           <div className={`text-2xl font-bold ${phaseDisplay.color}`}>
@@ -511,44 +763,27 @@ function DuckRaceContent() {
             <PlayersPanel />
           </div>
 
-          {/* Right columns - Betting */}
+          {/* Right columns - Ready/Info */}
           <div className="lg:col-span-2">
-            <BettingPanel />
-
-            {/* Game Rules */}
-            <div className="mt-6 bg-blue-dark/30 border border-blue rounded-lg p-4">
-              <h3 className="text-blue-light font-semibold mb-3">
-                How to Play
-              </h3>
-              <ul className="space-y-2 text-sm text-blue-light/80">
-                <li className="flex items-start gap-2">
-                  <span className="text-green-400">1.</span>
-                  Join the race by placing a bet (min{" "}
-                  {DUCK_RACE_CONFIG.MIN_BET.toLocaleString()} CCC)
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-400">2.</span>
-                  First player sets the bet amount - others must match
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-400">3.</span>
-                  Need at least {DUCK_RACE_CONFIG.MIN_PLAYERS} players to start
-                  (max {DUCK_RACE_CONFIG.MAX_PLAYERS})
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-400">4.</span>
-                  Ducks race based on random numbers - first to finish wins!
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-yellow-400">🏆</span>
-                  Winner takes the entire pot!
-                </li>
-              </ul>
-            </div>
+            <ReadyPanel />
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Main Duck Race game content
+ */
+function DuckRaceContent() {
+  const { state } = useDuckRace();
+
+  return (
+    <>
+      <ConnectionStatus />
+      {state.isInLobby ? <LobbyView /> : <RoomView />}
+    </>
   );
 }
 

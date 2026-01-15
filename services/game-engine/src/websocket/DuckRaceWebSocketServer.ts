@@ -1,6 +1,7 @@
 /**
  * WebSocket Server for Duck Race
  * Handles connections, authentication, and message routing for duck racing
+ * Users start in lobby and can create/join rooms
  */
 
 import { WebSocketServer as WSServer, WebSocket } from "ws";
@@ -9,10 +10,11 @@ import { parse } from "url";
 import jwt from "jsonwebtoken";
 import { DuckRaceManager } from "./DuckRaceManager";
 import {
-  DUCK_RACE_CONFIG,
   DuckRaceClientMessage,
   DuckRaceServerMessage,
-  PlaceDuckBetPayload,
+  CreateRoomPayload,
+  JoinRoomPayload,
+  SetReadyPayload,
 } from "./duckRaceTypes";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_key";
@@ -40,7 +42,8 @@ export class DuckRaceWebSocketServer {
     // Initialize game manager with broadcast functions
     this.gameManager = new DuckRaceManager(
       this.broadcastToRoom.bind(this),
-      this.sendToUser.bind(this)
+      this.sendToUser.bind(this),
+      this.broadcastToLobby.bind(this)
     );
 
     // Setup connection handler
@@ -83,6 +86,7 @@ export class DuckRaceWebSocketServer {
       ws.userId = payload.userId;
       ws.username = payload.username || `Player_${payload.userId.substring(0, 8)}`;
       ws.isAlive = true;
+      ws.roomId = undefined; // Start in lobby (no room)
 
       console.log(`✅ Duck Race user authenticated: ${ws.username} (${ws.userId})`);
 
@@ -96,29 +100,14 @@ export class DuckRaceWebSocketServer {
       // Store connection
       this.connections.set(ws.userId, ws);
 
-      // Auto-join default room
-      const roomId = (query.room as string) || DUCK_RACE_CONFIG.DEFAULT_ROOM_ID;
-      ws.roomId = roomId;
-
-      try {
-        const roomState = await this.gameManager.handlePlayerJoin(
-          ws.userId,
-          ws.username,
-          roomId
-        );
-
-        // Send room state to client
-        this.send(ws, {
-          type: "RACE_STATE",
-          payload: roomState,
-          timestamp: Date.now(),
-        });
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Failed to join room";
-        this.sendError(ws, "JOIN_FAILED", errorMessage);
-        ws.close(1008, errorMessage);
-        return;
-      }
+      // Send room list with balance (user starts in lobby)
+      const rooms = this.gameManager.getRoomList();
+      const yourBalance = await this.gameManager.getUserBalance(ws.userId);
+      this.send(ws, {
+        type: "ROOM_LIST",
+        payload: { rooms, yourBalance },
+        timestamp: Date.now(),
+      });
 
       // Setup message handler
       ws.on("message", async (data: Buffer) => {
@@ -159,16 +148,24 @@ export class DuckRaceWebSocketServer {
       const message: DuckRaceClientMessage = JSON.parse(data.toString());
 
       switch (message.type) {
-        case "JOIN_RACE":
-          await this.handleJoinRace(ws, message.payload as { roomId?: string });
+        case "GET_ROOMS":
+          await this.handleGetRooms(ws);
           break;
 
-        case "LEAVE_RACE":
-          await this.handleLeaveRace(ws);
+        case "CREATE_ROOM":
+          await this.handleCreateRoom(ws, message.payload as CreateRoomPayload);
           break;
 
-        case "PLACE_BET":
-          await this.handlePlaceBet(ws, message.payload as PlaceDuckBetPayload);
+        case "JOIN_ROOM":
+          await this.handleJoinRoom(ws, message.payload as JoinRoomPayload);
+          break;
+
+        case "LEAVE_ROOM":
+          await this.handleLeaveRoom(ws);
+          break;
+
+        case "SET_READY":
+          await this.handleSetReady(ws, message.payload as SetReadyPayload);
           break;
 
         case "PING":
@@ -185,92 +182,151 @@ export class DuckRaceWebSocketServer {
   }
 
   /**
-   * Handle join race request
+   * Handle get rooms request
    */
-  private async handleJoinRace(
-    ws: ExtendedWebSocket,
-    payload?: { roomId?: string }
-  ): Promise<void> {
-    if (!ws.userId || !ws.username) return;
-
-    const roomId = payload?.roomId || DUCK_RACE_CONFIG.DEFAULT_ROOM_ID;
-
-    // Leave current room if different
-    if (ws.roomId && ws.roomId !== roomId) {
-      await this.gameManager.handlePlayerLeave(ws.userId, ws.roomId);
-    }
-
-    ws.roomId = roomId;
-
-    try {
-      const roomState = await this.gameManager.handlePlayerJoin(
-        ws.userId,
-        ws.username,
-        roomId
-      );
-
-      this.send(ws, {
-        type: "RACE_STATE",
-        payload: roomState,
-        timestamp: Date.now(),
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to join race";
-      this.sendError(ws, "JOIN_FAILED", errorMessage);
-    }
-  }
-
-  /**
-   * Handle leave race request
-   */
-  private async handleLeaveRace(ws: ExtendedWebSocket): Promise<void> {
-    if (!ws.userId || !ws.roomId) return;
-
-    await this.gameManager.handlePlayerLeave(ws.userId, ws.roomId);
-    ws.roomId = undefined;
-
+  private async handleGetRooms(ws: ExtendedWebSocket): Promise<void> {
+    if (!ws.userId) return;
+    const rooms = this.gameManager.getRoomList();
+    const yourBalance = await this.gameManager.getUserBalance(ws.userId);
     this.send(ws, {
-      type: "RACE_STATE",
-      payload: {
-        roomId: "",
-        roundId: "",
-        phase: "waiting",
-        timeRemaining: 0,
-        betAmount: 0,
-        totalPot: 0,
-        players: [],
-        yourBalance: 0,
-        yourHasBet: false,
-      },
+      type: "ROOM_LIST",
+      payload: { rooms, yourBalance },
       timestamp: Date.now(),
     });
   }
 
   /**
-   * Handle bet placement
+   * Handle create room request
    */
-  private async handlePlaceBet(
+  private async handleCreateRoom(
     ws: ExtendedWebSocket,
-    payload?: PlaceDuckBetPayload
+    payload?: CreateRoomPayload
   ): Promise<void> {
-    if (!ws.userId || !ws.roomId) {
-      this.sendError(ws, "NOT_IN_ROOM", "Not in a race room");
+    if (!ws.userId || !ws.username) return;
+
+    if (!payload || !payload.betAmount) {
+      this.sendError(ws, "INVALID_PAYLOAD", "Bet amount is required");
       return;
     }
 
-    if (!payload || payload.amount === undefined) {
-      this.sendError(ws, "INVALID_BET", "Bet amount required");
-      return;
+    // If already in a room, leave it first
+    if (ws.roomId) {
+      await this.gameManager.handleLeaveRoom(ws.userId, ws.roomId);
     }
 
-    const result = await this.gameManager.handlePlaceBet(
+    const result = await this.gameManager.handleCreateRoom(
       ws.userId,
-      ws.roomId,
-      payload.amount
+      ws.username,
+      payload.betAmount,
+      payload.isPersistent ?? false,
+      payload.roomName
     );
 
     if (!result.success) {
-      this.sendError(ws, "BET_FAILED", result.error || "Failed to place bet");
+      this.sendError(ws, "CREATE_FAILED", result.error || "Failed to create room");
+      return;
+    }
+
+    // Update the WebSocket's room
+    ws.roomId = result.roomState?.roomId;
+
+    // Send room state to creator
+    this.send(ws, {
+      type: "RACE_STATE",
+      payload: result.roomState!,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Handle join room request
+   */
+  private async handleJoinRoom(
+    ws: ExtendedWebSocket,
+    payload?: JoinRoomPayload
+  ): Promise<void> {
+    if (!ws.userId || !ws.username) return;
+
+    if (!payload || !payload.roomId) {
+      this.sendError(ws, "INVALID_PAYLOAD", "Room ID is required");
+      return;
+    }
+
+    // If already in a room, leave it first
+    if (ws.roomId) {
+      await this.gameManager.handleLeaveRoom(ws.userId, ws.roomId);
+    }
+
+    const result = await this.gameManager.handleJoinRoom(
+      ws.userId,
+      ws.username,
+      payload.roomId
+    );
+
+    if (!result.success) {
+      this.sendError(ws, "JOIN_FAILED", result.error || "Failed to join room");
+      return;
+    }
+
+    // Update the WebSocket's room
+    ws.roomId = payload.roomId;
+
+    // Send room state to player
+    this.send(ws, {
+      type: "RACE_STATE",
+      payload: result.roomState!,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Handle leave room request
+   */
+  private async handleLeaveRoom(ws: ExtendedWebSocket): Promise<void> {
+    if (!ws.userId || !ws.roomId) {
+      // Already in lobby
+      this.sendError(ws, "NOT_IN_ROOM", "Not in a room");
+      return;
+    }
+
+    await this.gameManager.handleLeaveRoom(ws.userId, ws.roomId);
+    ws.roomId = undefined;
+
+    // Send room list with balance (back to lobby)
+    const rooms = this.gameManager.getRoomList();
+    const yourBalance = await this.gameManager.getUserBalance(ws.userId);
+    this.send(ws, {
+      type: "ROOM_LIST",
+      payload: { rooms, yourBalance },
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Handle set ready request
+   */
+  private async handleSetReady(
+    ws: ExtendedWebSocket,
+    payload?: SetReadyPayload
+  ): Promise<void> {
+    if (!ws.userId || !ws.roomId) {
+      this.sendError(ws, "NOT_IN_ROOM", "Not in a room");
+      return;
+    }
+
+    if (payload === undefined || payload.isReady === undefined) {
+      this.sendError(ws, "INVALID_PAYLOAD", "Ready status is required");
+      return;
+    }
+
+    const result = await this.gameManager.handleSetReady(
+      ws.userId,
+      ws.roomId,
+      payload.isReady
+    );
+
+    if (!result.success) {
+      this.sendError(ws, "READY_FAILED", result.error || "Failed to set ready status");
     }
     // Success is broadcast by DuckRaceManager
   }
@@ -288,7 +344,7 @@ export class DuckRaceWebSocketServer {
 
     // Handle room leave
     if (ws.roomId) {
-      await this.gameManager.handlePlayerLeave(ws.userId, ws.roomId);
+      await this.gameManager.handleLeaveRoom(ws.userId, ws.roomId);
     }
   }
 
@@ -328,6 +384,17 @@ export class DuckRaceWebSocketServer {
   broadcastToRoom(roomId: string, message: DuckRaceServerMessage, excludeUserId?: string): void {
     for (const [userId, ws] of this.connections) {
       if (ws.roomId === roomId && userId !== excludeUserId) {
+        this.send(ws, message);
+      }
+    }
+  }
+
+  /**
+   * Broadcast message to all users in lobby (not in any room)
+   */
+  broadcastToLobby(message: DuckRaceServerMessage): void {
+    for (const [, ws] of this.connections) {
+      if (!ws.roomId) {
         this.send(ws, message);
       }
     }

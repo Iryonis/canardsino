@@ -1,6 +1,7 @@
 /**
  * Duck Race Context
  * Manages multiplayer duck race game state via WebSocket
+ * Supports lobby-based room system with ready mechanics
  */
 
 "use client";
@@ -18,11 +19,16 @@ import {
   type DuckRacePhase,
   type DuckPlayer,
   type DuckColor,
+  type RoomInfo,
+  type RoomListPayload,
+  type RoomCreatedPayload,
+  type RoomUpdatedPayload,
+  type RoomDeletedPayload,
   type RaceStatePayload,
   type DuckPlayerJoinedPayload,
   type DuckPlayerLeftPayload,
-  type DuckBetPlacedPayload,
-  type DuckBettingStartedPayload,
+  type PlayerReadyPayload,
+  type AllReadyPayload,
   type CountdownTickPayload,
   type RaceStartedPayload,
   type RaceUpdatePayload,
@@ -39,11 +45,19 @@ interface DuckRaceState {
   isConnecting: boolean;
   error: string | null;
 
+  // Lobby state
+  isInLobby: boolean;
+  rooms: RoomInfo[];
+
   // Room state
   roomId: string;
+  roomName: string;
   roundId: string;
   phase: DuckRacePhase;
   timeRemaining: number;
+  creatorId: string;
+  creatorUsername: string;
+  isPersistent: boolean;
 
   // Race state
   betAmount: number;
@@ -53,8 +67,11 @@ interface DuckRaceState {
 
   // Your state
   yourBalance: number;
-  yourHasBet: boolean;
+  yourIsReady: boolean;
   yourLane: number | null;
+
+  // Ready counts
+  readyCount: number;
 
   // Race result
   winner: {
@@ -79,14 +96,10 @@ interface DuckRaceState {
     rank: number;
   }>;
 
-  // Betting trigger info
-  bettingTriggeredBy: { userId: string; username: string } | null;
-
   // Leader during race
   leaderId: string | null;
 
   // UI helpers
-  canBet: boolean;
   isRacing: boolean;
   isCountdown: boolean;
   isWaiting: boolean;
@@ -98,17 +111,22 @@ type Action =
   | { type: "SET_CONNECTING"; payload: boolean }
   | { type: "SET_CONNECTED"; payload: boolean }
   | { type: "SET_ERROR"; payload: string | null }
+  | { type: "SET_ROOM_LIST"; payload: RoomListPayload }
+  | { type: "ROOM_CREATED"; payload: RoomCreatedPayload }
+  | { type: "ROOM_UPDATED"; payload: RoomUpdatedPayload }
+  | { type: "ROOM_DELETED"; payload: RoomDeletedPayload }
   | { type: "SET_RACE_STATE"; payload: RaceStatePayload }
   | { type: "PLAYER_JOINED"; payload: DuckPlayerJoinedPayload }
   | { type: "PLAYER_LEFT"; payload: DuckPlayerLeftPayload }
-  | { type: "BET_PLACED"; payload: DuckBetPlacedPayload }
-  | { type: "BETTING_STARTED"; payload: DuckBettingStartedPayload }
+  | { type: "PLAYER_READY"; payload: PlayerReadyPayload }
+  | { type: "ALL_READY"; payload: AllReadyPayload }
   | { type: "COUNTDOWN_TICK"; payload: CountdownTickPayload }
   | { type: "RACE_STARTED"; payload: RaceStartedPayload }
   | { type: "RACE_UPDATE"; payload: RaceUpdatePayload }
   | { type: "RACE_FINISHED"; payload: RaceFinishedPayload }
   | { type: "WAITING_FOR_PLAYERS"; payload: WaitingForPlayersPayload }
   | { type: "BALANCE_UPDATE"; payload: DuckBalanceUpdatePayload }
+  | { type: "GO_TO_LOBBY" }
   | { type: "RESET" };
 
 // Initial state
@@ -116,23 +134,28 @@ const initialState: DuckRaceState = {
   isConnected: false,
   isConnecting: false,
   error: null,
+  isInLobby: true,
+  rooms: [],
   roomId: "",
+  roomName: "",
   roundId: "",
   phase: "waiting",
   timeRemaining: 0,
+  creatorId: "",
+  creatorUsername: "",
+  isPersistent: false,
   betAmount: 0,
   totalPot: 0,
   players: [],
   playerCount: 0,
   yourBalance: 0,
-  yourHasBet: false,
+  yourIsReady: false,
   yourLane: null,
+  readyCount: 0,
   winner: null,
   yourResult: null,
   finalPositions: [],
-  bettingTriggeredBy: null,
   leaderId: null,
-  canBet: true,
   isRacing: false,
   isCountdown: false,
   isWaiting: true,
@@ -156,22 +179,76 @@ function reducer(state: DuckRaceState, action: Action): DuckRaceState {
     case "SET_ERROR":
       return { ...state, error: action.payload };
 
-    case "SET_RACE_STATE": {
+    case "SET_ROOM_LIST": {
       const { payload } = action;
       return {
         ...state,
+        rooms: payload.rooms,
+        isInLobby: true,
+        yourBalance: payload.yourBalance ?? state.yourBalance,
+      };
+    }
+
+    case "ROOM_CREATED": {
+      const { payload } = action;
+      // Add the new room to the list if we're in lobby
+      if (state.isInLobby) {
+        return {
+          ...state,
+          rooms: [...state.rooms, payload.room],
+        };
+      }
+      return state;
+    }
+
+    case "ROOM_UPDATED": {
+      const { payload } = action;
+      // Update the room in the list if we're in lobby
+      if (state.isInLobby) {
+        return {
+          ...state,
+          rooms: state.rooms.map((r) =>
+            r.roomId === payload.room.roomId ? payload.room : r
+          ),
+        };
+      }
+      return state;
+    }
+
+    case "ROOM_DELETED": {
+      const { payload } = action;
+      // Remove the room from the list if we're in lobby
+      if (state.isInLobby) {
+        return {
+          ...state,
+          rooms: state.rooms.filter((r) => r.roomId !== payload.roomId),
+        };
+      }
+      return state;
+    }
+
+    case "SET_RACE_STATE": {
+      const { payload } = action;
+      const readyCount = payload.players.filter((p) => p.isReady).length;
+      return {
+        ...state,
+        isInLobby: false,
         roomId: payload.roomId,
+        roomName: payload.roomName,
         roundId: payload.roundId,
         phase: payload.phase,
         timeRemaining: payload.timeRemaining,
         betAmount: payload.betAmount,
         totalPot: payload.totalPot,
+        creatorId: payload.creatorId,
+        creatorUsername: payload.creatorUsername,
+        isPersistent: payload.isPersistent,
         players: payload.players,
         playerCount: payload.players.length,
         yourBalance: payload.yourBalance,
-        yourHasBet: payload.yourHasBet,
+        yourIsReady: payload.yourIsReady,
         yourLane: payload.yourLane ?? null,
-        canBet: payload.phase === "waiting" || payload.phase === "betting",
+        readyCount,
         isRacing: payload.phase === "racing",
         isCountdown: payload.phase === "countdown",
         isWaiting: payload.phase === "waiting",
@@ -180,7 +257,6 @@ function reducer(state: DuckRaceState, action: Action): DuckRaceState {
         winner: null,
         yourResult: null,
         finalPositions: [],
-        bettingTriggeredBy: null,
         leaderId: null,
       };
     }
@@ -200,6 +276,7 @@ function reducer(state: DuckRaceState, action: Action): DuckRaceState {
             userId: payload.userId,
             username: payload.username,
             hasBet: false,
+            isReady: payload.isReady,
             position: 0,
             lane: payload.lane,
             color: payload.color,
@@ -212,59 +289,40 @@ function reducer(state: DuckRaceState, action: Action): DuckRaceState {
 
     case "PLAYER_LEFT": {
       const { payload } = action;
-      return {
-        ...state,
-        players: state.players.filter((p) => p.userId !== payload.userId),
-        playerCount: payload.playerCount,
-      };
-    }
-
-    case "BET_PLACED": {
-      const { payload } = action;
-
-      // Update player's bet status
-      const updatedPlayers = state.players.map((p) => {
-        if (p.userId === payload.userId) {
-          return { ...p, hasBet: true };
-        }
-        return p;
-      });
-
-      // If this is your bet, update yourHasBet and yourBalance
-      const isYourBet = payload.newBalance !== undefined;
+      const updatedPlayers = state.players.filter((p) => p.userId !== payload.userId);
+      const readyCount = updatedPlayers.filter((p) => p.isReady).length;
       return {
         ...state,
         players: updatedPlayers,
-        totalPot: payload.totalPot,
-        yourHasBet: isYourBet ? true : state.yourHasBet,
-        yourBalance: isYourBet ? payload.newBalance! : state.yourBalance,
-        betAmount: state.betAmount || payload.betAmount,
+        playerCount: payload.playerCount,
+        readyCount,
       };
     }
 
-    case "BETTING_STARTED": {
+    case "PLAYER_READY": {
       const { payload } = action;
+      const updatedPlayers = state.players.map((p) => {
+        if (p.userId === payload.userId) {
+          return { ...p, isReady: payload.isReady };
+        }
+        return p;
+      });
       return {
         ...state,
-        roundId: payload.roundId,
-        phase: "betting",
-        betAmount: payload.betAmount,
-        timeRemaining: payload.timeRemaining,
-        bettingTriggeredBy: payload.triggeredBy,
-        canBet: true,
-        isRacing: false,
-        isCountdown: false,
-        isWaiting: false,
-        isFinished: false,
+        players: updatedPlayers,
+        readyCount: payload.readyCount,
       };
     }
+
+    case "ALL_READY":
+      // All players are ready, countdown will start
+      return state;
 
     case "COUNTDOWN_TICK":
       return {
         ...state,
         phase: "countdown",
         timeRemaining: action.payload.timeRemaining,
-        canBet: false,
         isRacing: false,
         isCountdown: true,
         isWaiting: false,
@@ -277,13 +335,12 @@ function reducer(state: DuckRaceState, action: Action): DuckRaceState {
         ...state,
         phase: "racing",
         totalPot: payload.totalPot,
-        canBet: false,
         isRacing: true,
         isCountdown: false,
         isWaiting: false,
         isFinished: false,
-        // Reset positions
-        players: state.players.map((p) => ({ ...p, position: 0 })),
+        // Reset positions and mark all as having bet
+        players: state.players.map((p) => ({ ...p, position: 0, hasBet: true })),
       };
     }
 
@@ -315,7 +372,6 @@ function reducer(state: DuckRaceState, action: Action): DuckRaceState {
         yourResult: payload.yourResult ?? null,
         yourBalance: payload.yourResult?.newBalance ?? state.yourBalance,
         finalPositions: payload.finalPositions,
-        canBet: false,
         isRacing: false,
         isCountdown: false,
         isWaiting: false,
@@ -330,21 +386,24 @@ function reducer(state: DuckRaceState, action: Action): DuckRaceState {
         roundId: payload.roundId,
         phase: "waiting",
         timeRemaining: 0,
-        betAmount: 0,
         totalPot: 0,
-        bettingTriggeredBy: null,
-        canBet: true,
         isRacing: false,
         isCountdown: false,
         isWaiting: true,
         isFinished: false,
         // Reset player state but keep players in room
-        yourHasBet: false,
+        yourIsReady: false,
+        readyCount: 0,
         winner: null,
         yourResult: null,
         finalPositions: [],
         leaderId: null,
-        players: state.players.map((p) => ({ ...p, hasBet: false, position: 0 })),
+        players: state.players.map((p) => ({
+          ...p,
+          hasBet: false,
+          isReady: false,
+          position: 0,
+        })),
       };
     }
 
@@ -352,6 +411,17 @@ function reducer(state: DuckRaceState, action: Action): DuckRaceState {
       return {
         ...state,
         yourBalance: action.payload.balance,
+      };
+
+    case "GO_TO_LOBBY":
+      return {
+        ...state,
+        isInLobby: true,
+        roomId: "",
+        roomName: "",
+        players: [],
+        yourIsReady: false,
+        yourLane: null,
       };
 
     case "RESET":
@@ -367,7 +437,11 @@ interface DuckRaceContextType {
   state: DuckRaceState;
   connect: () => void;
   disconnect: () => void;
-  placeBet: (amount: number) => void;
+  getRooms: () => void;
+  createRoom: (betAmount: number, isPersistent: boolean, roomName?: string) => void;
+  joinRoom: (roomId: string) => void;
+  leaveRoom: () => void;
+  setReady: (isReady: boolean) => void;
 }
 
 const DuckRaceContextInstance = createContext<DuckRaceContextType | null>(null);
@@ -386,6 +460,22 @@ export function DuckRaceProvider({
   const [state, dispatch] = useReducer(reducer, initialState);
 
   // WebSocket callbacks
+  const handleRoomList = useCallback((payload: RoomListPayload) => {
+    dispatch({ type: "SET_ROOM_LIST", payload });
+  }, []);
+
+  const handleRoomCreated = useCallback((payload: RoomCreatedPayload) => {
+    dispatch({ type: "ROOM_CREATED", payload });
+  }, []);
+
+  const handleRoomUpdated = useCallback((payload: RoomUpdatedPayload) => {
+    dispatch({ type: "ROOM_UPDATED", payload });
+  }, []);
+
+  const handleRoomDeleted = useCallback((payload: RoomDeletedPayload) => {
+    dispatch({ type: "ROOM_DELETED", payload });
+  }, []);
+
   const handleRaceState = useCallback((payload: RaceStatePayload) => {
     dispatch({ type: "SET_RACE_STATE", payload });
   }, []);
@@ -398,12 +488,12 @@ export function DuckRaceProvider({
     dispatch({ type: "PLAYER_LEFT", payload });
   }, []);
 
-  const handleBetPlaced = useCallback((payload: DuckBetPlacedPayload) => {
-    dispatch({ type: "BET_PLACED", payload });
+  const handlePlayerReady = useCallback((payload: PlayerReadyPayload) => {
+    dispatch({ type: "PLAYER_READY", payload });
   }, []);
 
-  const handleBettingStarted = useCallback((payload: DuckBettingStartedPayload) => {
-    dispatch({ type: "BETTING_STARTED", payload });
+  const handleAllReady = useCallback((payload: AllReadyPayload) => {
+    dispatch({ type: "ALL_READY", payload });
   }, []);
 
   const handleCountdownTick = useCallback((payload: CountdownTickPayload) => {
@@ -441,11 +531,15 @@ export function DuckRaceProvider({
 
   // Setup WebSocket hook
   const ws = useDuckRaceWebSocket({
+    onRoomList: handleRoomList,
+    onRoomCreated: handleRoomCreated,
+    onRoomUpdated: handleRoomUpdated,
+    onRoomDeleted: handleRoomDeleted,
     onRaceState: handleRaceState,
     onPlayerJoined: handlePlayerJoined,
     onPlayerLeft: handlePlayerLeft,
-    onBetPlaced: handleBetPlaced,
-    onBettingStarted: handleBettingStarted,
+    onPlayerReady: handlePlayerReady,
+    onAllReady: handleAllReady,
     onCountdownTick: handleCountdownTick,
     onRaceStarted: handleRaceStarted,
     onRaceUpdate: handleRaceUpdate,
@@ -462,6 +556,12 @@ export function DuckRaceProvider({
     ws.connect();
   }, [ws]);
 
+  // Leave room and go to lobby
+  const leaveRoom = useCallback(() => {
+    ws.leaveRoom();
+    dispatch({ type: "GO_TO_LOBBY" });
+  }, [ws]);
+
   // Auto-connect on mount if enabled
   useEffect(() => {
     if (autoConnect) {
@@ -476,9 +576,13 @@ export function DuckRaceProvider({
       state,
       connect,
       disconnect: ws.disconnect,
-      placeBet: ws.placeBet,
+      getRooms: ws.getRooms,
+      createRoom: ws.createRoom,
+      joinRoom: ws.joinRoom,
+      leaveRoom,
+      setReady: ws.setReady,
     }),
-    [state, connect, ws.disconnect, ws.placeBet]
+    [state, connect, ws.disconnect, ws.getRooms, ws.createRoom, ws.joinRoom, leaveRoom, ws.setReady]
   );
 
   return (
@@ -498,4 +602,4 @@ export function useDuckRace() {
 }
 
 // Export types
-export type { DuckRaceState, DuckPlayer, DuckColor, DuckRacePhase };
+export type { DuckRaceState, DuckPlayer, DuckColor, DuckRacePhase, RoomInfo };

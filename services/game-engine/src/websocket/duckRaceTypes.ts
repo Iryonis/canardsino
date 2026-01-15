@@ -56,6 +56,8 @@ export interface DuckPlayer {
   betAmount: number;
   /** Whether player has placed their bet */
   hasBet: boolean;
+  /** Whether player is ready to start */
+  isReady: boolean;
   /** Current position on track (0-100) */
   position: number;
   /** Lane number (1-5) */
@@ -79,7 +81,7 @@ export interface DuckRaceRound {
   phase: DuckRacePhase;
   /** Players in this race */
   players: Map<string, DuckPlayer>;
-  /** Bet amount for this race (set by first player) */
+  /** Bet amount for this race (set by room creator) */
   betAmount: number;
   /** Seconds remaining in current phase */
   timeRemaining: number;
@@ -91,6 +93,14 @@ export interface DuckRaceRound {
   winnerUsername?: string;
   /** Race history - position snapshots for replay */
   raceHistory: RaceSnapshot[];
+  /** User ID of room creator */
+  creatorId: string;
+  /** Creator username */
+  creatorUsername: string;
+  /** Whether room persists after race (allows multiple races) */
+  isPersistent: boolean;
+  /** Room name for display */
+  roomName: string;
 }
 
 export interface RaceSnapshot {
@@ -104,31 +114,55 @@ export interface RaceSnapshot {
 }
 
 // ============================================================================
+// Room Info for Lobby
+// ============================================================================
+
+export interface RoomInfo {
+  roomId: string;
+  roomName: string;
+  creatorId: string;
+  creatorUsername: string;
+  betAmount: number;
+  playerCount: number;
+  maxPlayers: number;
+  isPersistent: boolean;
+  phase: DuckRacePhase;
+  readyCount: number;
+}
+
+// ============================================================================
 // Client -> Server Messages
 // ============================================================================
 
 export type DuckRaceClientMessageType =
-  | "JOIN_RACE"
-  | "LEAVE_RACE"
-  | "PLACE_BET"
+  | "GET_ROOMS"
+  | "CREATE_ROOM"
+  | "JOIN_ROOM"
+  | "LEAVE_ROOM"
+  | "SET_READY"
   | "PING";
 
-export interface JoinRacePayload {
-  roomId?: string;
+export interface GetRoomsPayload {}
+
+export interface CreateRoomPayload {
+  betAmount: number;
+  isPersistent: boolean;
+  roomName?: string;
 }
 
-export interface LeaveRacePayload {
-  roomId?: string;
+export interface JoinRoomPayload {
+  roomId: string;
 }
 
-export interface PlaceDuckBetPayload {
-  /** Bet amount in CCC */
-  amount: number;
+export interface LeaveRoomPayload {}
+
+export interface SetReadyPayload {
+  isReady: boolean;
 }
 
 export interface DuckRaceClientMessage {
   type: DuckRaceClientMessageType;
-  payload?: JoinRacePayload | LeaveRacePayload | PlaceDuckBetPayload;
+  payload?: GetRoomsPayload | CreateRoomPayload | JoinRoomPayload | LeaveRoomPayload | SetReadyPayload;
 }
 
 // ============================================================================
@@ -136,11 +170,15 @@ export interface DuckRaceClientMessage {
 // ============================================================================
 
 export type DuckRaceServerMessageType =
+  | "ROOM_LIST"
+  | "ROOM_CREATED"
+  | "ROOM_UPDATED"
+  | "ROOM_DELETED"
   | "RACE_STATE"
   | "PLAYER_JOINED"
   | "PLAYER_LEFT"
-  | "BET_PLACED"
-  | "BETTING_STARTED"
+  | "PLAYER_READY"
+  | "ALL_READY"
   | "COUNTDOWN_TICK"
   | "RACE_STARTED"
   | "RACE_UPDATE"
@@ -150,18 +188,58 @@ export type DuckRaceServerMessageType =
   | "ERROR"
   | "PONG";
 
+// Room list for lobby
+export interface RoomListPayload {
+  rooms: RoomInfo[];
+  yourBalance?: number;
+}
+
+// Room created notification
+export interface RoomCreatedPayload {
+  room: RoomInfo;
+}
+
+// Room updated notification (player count, ready count changed)
+export interface RoomUpdatedPayload {
+  room: RoomInfo;
+}
+
+// Room deleted notification
+export interface RoomDeletedPayload {
+  roomId: string;
+}
+
+// Player ready status changed
+export interface PlayerReadyPayload {
+  userId: string;
+  username: string;
+  isReady: boolean;
+  readyCount: number;
+  totalPlayers: number;
+}
+
+// All players ready - countdown starting
+export interface AllReadyPayload {
+  message: string;
+}
+
 // Full race state sent on join
 export interface RaceStatePayload {
   roomId: string;
+  roomName: string;
   roundId: string;
   phase: DuckRacePhase;
   timeRemaining: number;
   betAmount: number;
   totalPot: number;
+  creatorId: string;
+  creatorUsername: string;
+  isPersistent: boolean;
   players: Array<{
     userId: string;
     username: string;
     hasBet: boolean;
+    isReady: boolean;
     position: number;
     lane: number;
     color: DuckColor;
@@ -169,8 +247,8 @@ export interface RaceStatePayload {
   }>;
   /** Your current balance */
   yourBalance: number;
-  /** Your bet status */
-  yourHasBet: boolean;
+  /** Your ready status */
+  yourIsReady: boolean;
   /** Your lane number (if joined) */
   yourLane?: number;
 }
@@ -181,6 +259,7 @@ export interface DuckPlayerJoinedPayload {
   lane: number;
   color: DuckColor;
   playerCount: number;
+  isReady: boolean;
 }
 
 export interface DuckPlayerLeftPayload {
@@ -189,27 +268,6 @@ export interface DuckPlayerLeftPayload {
   playerCount: number;
   /** If the leaving player had bet, refund info */
   refunded?: boolean;
-}
-
-export interface DuckBetPlacedPayload {
-  userId: string;
-  username: string;
-  betAmount: number;
-  totalPot: number;
-  playersWithBets: number;
-  /** Only sent to the player who placed the bet */
-  newBalance?: number;
-}
-
-export interface DuckBettingStartedPayload {
-  roundId: string;
-  phase: "betting";
-  betAmount: number;
-  timeRemaining: number;
-  triggeredBy: {
-    userId: string;
-    username: string;
-  };
 }
 
 export interface CountdownTickPayload {
@@ -290,11 +348,15 @@ export interface DuckErrorPayload {
 export interface DuckRaceServerMessage {
   type: DuckRaceServerMessageType;
   payload?:
+    | RoomListPayload
+    | RoomCreatedPayload
+    | RoomUpdatedPayload
+    | RoomDeletedPayload
     | RaceStatePayload
     | DuckPlayerJoinedPayload
     | DuckPlayerLeftPayload
-    | DuckBetPlacedPayload
-    | DuckBettingStartedPayload
+    | PlayerReadyPayload
+    | AllReadyPayload
     | CountdownTickPayload
     | RaceStartedPayload
     | RaceUpdatePayload

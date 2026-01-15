@@ -1,14 +1,15 @@
 /**
  * Duck Race Manager
- * Manages multiplayer duck racing where players bet and race to the finish line
+ * Manages multiplayer duck racing with room-based lobbies
  *
  * Flow:
- * 1. WAITING - Waiting for players to join (min 2, max 5)
- * 2. BETTING - First player sets bet amount, others must match (15s)
- * 3. COUNTDOWN - 3s countdown before race starts
- * 4. RACING - Ducks advance based on random numbers until one crosses finish
- * 5. FINISHED - Show results, winner takes all
- * 6. Back to WAITING
+ * 1. LOBBY - Players browse available rooms or create a new one
+ * 2. WAITING - In room, waiting for players (min 2, max 5)
+ * 3. All players ready -> bets deducted
+ * 4. COUNTDOWN - 3s countdown before race starts
+ * 5. RACING - Ducks advance based on random numbers until one crosses finish
+ * 6. FINISHED - Show results, winner takes all
+ * 7. Room destroyed (single-race) or back to WAITING (persistent)
  */
 
 import { v4 as uuidv4 } from "uuid";
@@ -20,6 +21,7 @@ import {
   DuckRaceRound,
   DuckRaceServerMessage,
   RaceStatePayload,
+  RoomInfo,
   DuckColor,
 } from "./duckRaceTypes";
 
@@ -123,36 +125,17 @@ export class DuckRaceManager {
   /** Send to specific user function */
   private sendToUser: (userId: string, message: DuckRaceServerMessage) => void;
 
+  /** Broadcast to all users in lobby (not in any room) */
+  private broadcastToLobby: (message: DuckRaceServerMessage) => void;
+
   constructor(
     broadcastToRoom: (roomId: string, message: DuckRaceServerMessage, excludeUserId?: string) => void,
-    sendToUser: (userId: string, message: DuckRaceServerMessage) => void
+    sendToUser: (userId: string, message: DuckRaceServerMessage) => void,
+    broadcastToLobby: (message: DuckRaceServerMessage) => void
   ) {
     this.broadcastToRoom = broadcastToRoom;
     this.sendToUser = sendToUser;
-  }
-
-  /**
-   * Get or create a race round for a room
-   */
-  private getOrCreateRound(roomId: string): DuckRaceRound {
-    let round = this.rounds.get(roomId);
-
-    if (!round) {
-      round = {
-        roundId: uuidv4(),
-        roomId,
-        phase: "waiting",
-        players: new Map(),
-        betAmount: 0,
-        timeRemaining: 0,
-        totalPot: 0,
-        raceHistory: [],
-      };
-      this.rounds.set(roomId, round);
-      console.log(`🦆 Created new duck race room ${roomId} in WAITING phase`);
-    }
-
-    return round;
+    this.broadcastToLobby = broadcastToLobby;
   }
 
   /**
@@ -174,39 +157,457 @@ export class DuckRaceManager {
   }
 
   /**
-   * Start betting countdown when first player places bet
+   * Get room info for lobby display
    */
-  private startBettingCountdown(
-    roomId: string,
-    triggeredBy: { userId: string; username: string },
-    betAmount: number
-  ): void {
+  private getRoomInfo(round: DuckRaceRound): RoomInfo {
+    const readyCount = Array.from(round.players.values()).filter((p) => p.isReady).length;
+    return {
+      roomId: round.roomId,
+      roomName: round.roomName,
+      creatorId: round.creatorId,
+      creatorUsername: round.creatorUsername,
+      betAmount: round.betAmount,
+      playerCount: round.players.size,
+      maxPlayers: DUCK_RACE_CONFIG.MAX_PLAYERS,
+      isPersistent: round.isPersistent,
+      phase: round.phase,
+      readyCount,
+    };
+  }
+
+  /**
+   * Broadcast room list update to lobby
+   */
+  private broadcastRoomListUpdate(): void {
+    const rooms = this.getRoomList();
+    this.broadcastToLobby({
+      type: "ROOM_LIST",
+      payload: { rooms },
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Broadcast single room update to lobby
+   */
+  private broadcastRoomUpdate(round: DuckRaceRound): void {
+    this.broadcastToLobby({
+      type: "ROOM_UPDATED",
+      payload: { room: this.getRoomInfo(round) },
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Get list of all available rooms for lobby
+   */
+  getRoomList(): RoomInfo[] {
+    const rooms: RoomInfo[] = [];
+    for (const round of this.rounds.values()) {
+      // Only show rooms that are in waiting phase and not full
+      if (round.phase === "waiting" && round.players.size < DUCK_RACE_CONFIG.MAX_PLAYERS) {
+        rooms.push(this.getRoomInfo(round));
+      }
+    }
+    return rooms;
+  }
+
+  /**
+   * Get user balance from wallet service (exposed for WebSocket server)
+   */
+  async getUserBalance(userId: string): Promise<number> {
+    return getWalletBalance(userId);
+  }
+
+  /**
+   * Create a new race room
+   */
+  async handleCreateRoom(
+    userId: string,
+    username: string,
+    betAmount: number,
+    isPersistent: boolean,
+    roomName?: string
+  ): Promise<{ success: boolean; error?: string; roomState?: RaceStatePayload }> {
+    // Validate bet amount
+    if (betAmount < DUCK_RACE_CONFIG.MIN_BET) {
+      return { success: false, error: `Minimum bet is ${DUCK_RACE_CONFIG.MIN_BET} CCC` };
+    }
+
+    // Check user balance
+    const balance = await getWalletBalance(userId);
+    if (balance < betAmount) {
+      return { success: false, error: "Insufficient balance to create room with this bet amount" };
+    }
+
+    // Generate room ID and name
+    const roomId = uuidv4();
+    const finalRoomName = roomName || `${username}'s Race`;
+
+    // Create the round
+    const round: DuckRaceRound = {
+      roundId: uuidv4(),
+      roomId,
+      roomName: finalRoomName,
+      phase: "waiting",
+      players: new Map(),
+      betAmount,
+      timeRemaining: 0,
+      totalPot: 0,
+      raceHistory: [],
+      creatorId: userId,
+      creatorUsername: username,
+      isPersistent,
+    };
+
+    this.rounds.set(roomId, round);
+    console.log(`🦆 Room created: ${finalRoomName} by ${username} (${betAmount} CCC, persistent: ${isPersistent})`);
+
+    // Add creator to the room
+    const lane = this.getNextLane(round);
+    const player: DuckPlayer = {
+      userId,
+      username,
+      joinedAt: Date.now(),
+      betAmount: 0,
+      hasBet: false,
+      isReady: false,
+      position: 0,
+      lane,
+      isConnected: true,
+      color: this.getColorForLane(lane),
+    };
+
+    round.players.set(userId, player);
+
+    // Broadcast new room to lobby
+    this.broadcastToLobby({
+      type: "ROOM_CREATED",
+      payload: { room: this.getRoomInfo(round) },
+      timestamp: Date.now(),
+    });
+
+    // Return room state for the creator
+    const roomState = await this.buildRoomState(round, userId);
+    return { success: true, roomState };
+  }
+
+  /**
+   * Handle player joining a room
+   */
+  async handleJoinRoom(
+    userId: string,
+    username: string,
+    roomId: string
+  ): Promise<{ success: boolean; error?: string; roomState?: RaceStatePayload }> {
+    const round = this.rounds.get(roomId);
+
+    if (!round) {
+      return { success: false, error: "Room not found" };
+    }
+
+    // Check phase
+    if (round.phase !== "waiting") {
+      return { success: false, error: "Race already in progress" };
+    }
+
+    // Check if already in room
+    if (round.players.has(userId)) {
+      // Reconnecting
+      const player = round.players.get(userId)!;
+      player.isConnected = true;
+      console.log(`🔄 Player ${username} reconnected to room ${round.roomName}`);
+      const roomState = await this.buildRoomState(round, userId);
+      return { success: true, roomState };
+    }
+
+    // Check if room is full
+    if (round.players.size >= DUCK_RACE_CONFIG.MAX_PLAYERS) {
+      return { success: false, error: "Room is full" };
+    }
+
+    // Check user balance
+    const balance = await getWalletBalance(userId);
+    if (balance < round.betAmount) {
+      return { success: false, error: `Need at least ${round.betAmount} CCC to join this room` };
+    }
+
+    // Get lane
+    const lane = this.getNextLane(round);
+    if (lane === 0) {
+      return { success: false, error: "No lanes available" };
+    }
+
+    // Add player
+    const player: DuckPlayer = {
+      userId,
+      username,
+      joinedAt: Date.now(),
+      betAmount: 0,
+      hasBet: false,
+      isReady: false,
+      position: 0,
+      lane,
+      isConnected: true,
+      color: this.getColorForLane(lane),
+    };
+
+    round.players.set(userId, player);
+    console.log(`🦆 Player ${username} joined room ${round.roomName} in lane ${lane}`);
+
+    // Broadcast join to room
+    this.broadcastToRoom(
+      roomId,
+      {
+        type: "PLAYER_JOINED",
+        payload: {
+          userId,
+          username,
+          lane,
+          color: player.color,
+          playerCount: round.players.size,
+          isReady: false,
+        },
+        timestamp: Date.now(),
+      },
+      userId
+    );
+
+    // Update lobby
+    this.broadcastRoomUpdate(round);
+
+    const roomState = await this.buildRoomState(round, userId);
+    return { success: true, roomState };
+  }
+
+  /**
+   * Handle player leaving a room
+   */
+  async handleLeaveRoom(userId: string, roomId: string): Promise<void> {
     const round = this.rounds.get(roomId);
     if (!round) return;
 
-    if (round.phase !== "waiting") return;
+    const player = round.players.get(userId);
+    if (!player) return;
 
-    round.phase = "betting";
-    round.betAmount = betAmount;
-    round.timeRemaining = DUCK_RACE_CONFIG.BETTING_DURATION;
+    // If race is in progress, just mark as disconnected
+    if (round.phase === "racing" || round.phase === "countdown") {
+      player.isConnected = false;
+      console.log(`⚠️ Player ${player.username} disconnected during race`);
+      return;
+    }
 
-    console.log(
-      `⏱️ Duck race betting started by ${triggeredBy.username} with ${betAmount} CCC`
-    );
+    // Remove player from room
+    round.players.delete(userId);
+    console.log(`👋 Player ${player.username} left room ${round.roomName}`);
+
+    // Broadcast leave
+    this.broadcastToRoom(roomId, {
+      type: "PLAYER_LEFT",
+      payload: {
+        userId,
+        username: player.username,
+        playerCount: round.players.size,
+        refunded: false,
+      },
+      timestamp: Date.now(),
+    });
+
+    // If room is empty, delete it
+    if (round.players.size === 0) {
+      this.deleteRoom(roomId);
+      return;
+    }
+
+    // If creator left in waiting phase, assign new creator
+    if (round.creatorId === userId && round.phase === "waiting") {
+      const newCreator = round.players.values().next().value;
+      if (newCreator) {
+        round.creatorId = newCreator.userId;
+        round.creatorUsername = newCreator.username;
+        console.log(`👑 New room creator: ${newCreator.username}`);
+      }
+    }
+
+    // Update lobby
+    this.broadcastRoomUpdate(round);
+  }
+
+  /**
+   * Handle player setting ready status
+   */
+  async handleSetReady(
+    userId: string,
+    roomId: string,
+    isReady: boolean
+  ): Promise<{ success: boolean; error?: string }> {
+    const round = this.rounds.get(roomId);
+    if (!round) {
+      return { success: false, error: "Room not found" };
+    }
+
+    if (round.phase !== "waiting") {
+      return { success: false, error: "Cannot change ready status now" };
+    }
+
+    const player = round.players.get(userId);
+    if (!player) {
+      return { success: false, error: "Not in this room" };
+    }
+
+    // If setting ready, check balance again
+    if (isReady) {
+      const balance = await getWalletBalance(userId);
+      if (balance < round.betAmount) {
+        return { success: false, error: `Insufficient balance. Need ${round.betAmount} CCC` };
+      }
+    }
+
+    player.isReady = isReady;
+
+    const readyCount = Array.from(round.players.values()).filter((p) => p.isReady).length;
+    const totalPlayers = round.players.size;
+
+    console.log(`🦆 ${player.username} is ${isReady ? "READY" : "NOT READY"} (${readyCount}/${totalPlayers})`);
+
+    // Broadcast ready status change
+    this.broadcastToRoom(roomId, {
+      type: "PLAYER_READY",
+      payload: {
+        userId,
+        username: player.username,
+        isReady,
+        readyCount,
+        totalPlayers,
+      },
+      timestamp: Date.now(),
+    });
+
+    // Update lobby
+    this.broadcastRoomUpdate(round);
+
+    // Check if all players are ready (need at least MIN_PLAYERS)
+    if (readyCount === totalPlayers && totalPlayers >= DUCK_RACE_CONFIG.MIN_PLAYERS) {
+      await this.startCountdown(roomId);
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Start countdown when all players are ready
+   */
+  private async startCountdown(roomId: string): Promise<void> {
+    const round = this.rounds.get(roomId);
+    if (!round) return;
+
+    console.log(`✅ All players ready in room ${round.roomName}! Starting countdown...`);
+
+    // Deduct bets from all players
+    for (const player of round.players.values()) {
+      try {
+        const result = await updateWalletBalance(player.userId, round.betAmount, "bet");
+        player.hasBet = true;
+        player.betAmount = round.betAmount;
+        round.totalPot += round.betAmount;
+
+        // Send balance update to player
+        this.sendToUser(player.userId, {
+          type: "BALANCE_UPDATE",
+          payload: {
+            balance: result.newBalance,
+            reason: "bet_placed",
+          },
+          timestamp: Date.now(),
+        });
+
+        console.log(`💰 Deducted ${round.betAmount} CCC from ${player.username}`);
+      } catch (error) {
+        console.error(`Failed to deduct bet from ${player.username}:`, error);
+        // Cancel the race if we can't deduct from someone
+        await this.cancelRace(roomId, `Failed to process bet for ${player.username}`);
+        return;
+      }
+    }
+
+    // Broadcast all ready
+    this.broadcastToRoom(roomId, {
+      type: "ALL_READY",
+      payload: { message: "All players ready! Race starting..." },
+      timestamp: Date.now(),
+    });
+
+    // Start countdown phase
+    round.phase = "countdown";
+    round.timeRemaining = DUCK_RACE_CONFIG.COUNTDOWN_DURATION;
 
     this.broadcastToRoom(roomId, {
-      type: "BETTING_STARTED",
+      type: "COUNTDOWN_TICK",
       payload: {
-        roundId: round.roundId,
-        phase: "betting",
-        betAmount,
+        phase: "countdown",
         timeRemaining: round.timeRemaining,
-        triggeredBy,
       },
       timestamp: Date.now(),
     });
 
     this.startPhaseTimer(roomId);
+  }
+
+  /**
+   * Cancel race and refund all players
+   */
+  private async cancelRace(roomId: string, reason: string): Promise<void> {
+    const round = this.rounds.get(roomId);
+    if (!round) return;
+
+    console.log(`❌ Race cancelled in room ${round.roomName}: ${reason}`);
+
+    // Refund all players who had bet
+    for (const player of round.players.values()) {
+      if (player.hasBet) {
+        try {
+          const result = await updateWalletBalance(player.userId, round.betAmount, "win");
+          this.sendToUser(player.userId, {
+            type: "BALANCE_UPDATE",
+            payload: {
+              balance: result.newBalance,
+              reason: "refund",
+            },
+            timestamp: Date.now(),
+          });
+        } catch (error) {
+          console.error(`Failed to refund ${player.username}:`, error);
+        }
+      }
+
+      // Reset player state
+      player.hasBet = false;
+      player.isReady = false;
+      player.betAmount = 0;
+    }
+
+    round.phase = "waiting";
+    round.totalPot = 0;
+
+    // Broadcast error
+    this.broadcastToRoom(roomId, {
+      type: "ERROR",
+      payload: { code: "RACE_CANCELLED", message: reason },
+      timestamp: Date.now(),
+    });
+
+    // Send waiting state
+    this.broadcastToRoom(roomId, {
+      type: "WAITING_FOR_PLAYERS",
+      payload: {
+        roundId: round.roundId,
+        phase: "waiting",
+        playerCount: round.players.size,
+        minPlayers: DUCK_RACE_CONFIG.MIN_PLAYERS,
+        message: "Race cancelled. Waiting for players to ready up...",
+      },
+      timestamp: Date.now(),
+    });
   }
 
   /**
@@ -253,17 +654,7 @@ export class DuckRaceManager {
 
     round.timeRemaining--;
 
-    if (round.phase === "betting" || round.phase === "finished") {
-      // Broadcast countdown
-      this.broadcastToRoom(roomId, {
-        type: "COUNTDOWN_TICK",
-        payload: {
-          phase: "countdown",
-          timeRemaining: round.timeRemaining,
-        },
-        timestamp: Date.now(),
-      });
-    } else if (round.phase === "countdown") {
+    if (round.phase === "countdown" || round.phase === "finished") {
       this.broadcastToRoom(roomId, {
         type: "COUNTDOWN_TICK",
         payload: {
@@ -287,65 +678,13 @@ export class DuckRaceManager {
     if (!round) return;
 
     switch (round.phase) {
-      case "betting":
-        await this.startCountdownOrCancel(roomId);
-        break;
       case "countdown":
         await this.startRacing(roomId);
         break;
       case "finished":
-        await this.goBackToWaiting(roomId);
+        await this.handlePostRace(roomId);
         break;
     }
-  }
-
-  /**
-   * Start countdown if enough players, or cancel if not
-   */
-  private async startCountdownOrCancel(roomId: string): Promise<void> {
-    const round = this.rounds.get(roomId);
-    if (!round) return;
-
-    const playersWithBets = Array.from(round.players.values()).filter((p) => p.hasBet);
-
-    if (playersWithBets.length < DUCK_RACE_CONFIG.MIN_PLAYERS) {
-      // Not enough players, refund and go back to waiting
-      console.log(`🦆 Not enough players in room ${roomId}, cancelling race`);
-
-      for (const player of playersWithBets) {
-        try {
-          const result = await updateWalletBalance(player.userId, round.betAmount, "win");
-          this.sendToUser(player.userId, {
-            type: "BALANCE_UPDATE",
-            payload: {
-              balance: result.newBalance,
-              reason: "refund",
-            },
-            timestamp: Date.now(),
-          });
-        } catch (error) {
-          console.error(`Failed to refund ${player.username}:`, error);
-        }
-      }
-
-      await this.goBackToWaiting(roomId);
-      return;
-    }
-
-    // Start countdown
-    round.phase = "countdown";
-    round.timeRemaining = DUCK_RACE_CONFIG.COUNTDOWN_DURATION;
-
-    console.log(`🦆 Countdown starting for room ${roomId}`);
-
-    this.broadcastToRoom(roomId, {
-      type: "COUNTDOWN_TICK",
-      payload: {
-        phase: "countdown",
-        timeRemaining: round.timeRemaining,
-      },
-      timestamp: Date.now(),
-    });
   }
 
   /**
@@ -369,7 +708,7 @@ export class DuckRaceManager {
         color: p.color,
       }));
 
-    console.log(`🏁 Race starting in room ${roomId} with ${players.length} ducks!`);
+    console.log(`🏁 Race starting in room ${round.roomName} with ${players.length} ducks!`);
 
     this.broadcastToRoom(roomId, {
       type: "RACE_STARTED",
@@ -463,7 +802,7 @@ export class DuckRaceManager {
     round.winnerUsername = winner.username;
     round.timeRemaining = DUCK_RACE_CONFIG.RESULTS_DURATION;
 
-    console.log(`🏆 ${winner.username} won the race in room ${roomId}!`);
+    console.log(`🏆 ${winner.username} won the race in room ${round.roomName}!`);
 
     // Calculate final positions
     const activePlayers = Array.from(round.players.values())
@@ -527,38 +866,6 @@ export class DuckRaceManager {
       });
     }
 
-    // Send to spectators (players who joined but didn't bet)
-    for (const [userId, player] of round.players) {
-      if (!player.hasBet) {
-        const balance = await getWalletBalance(userId);
-        this.sendToUser(userId, {
-          type: "RACE_FINISHED",
-          payload: {
-            roundId: round.roundId,
-            phase: "finished",
-            winner: {
-              userId: winner.userId,
-              username: winner.username,
-              lane: winner.lane,
-              color: winner.color,
-              winnings: round.totalPot,
-            },
-            finalPositions,
-            totalPot: round.totalPot,
-            yourResult: {
-              rank: 0,
-              betAmount: 0,
-              winnings: 0,
-              netResult: 0,
-              newBalance: balance,
-            },
-            timeUntilNextRace: DUCK_RACE_CONFIG.RESULTS_DURATION,
-          },
-          timestamp: Date.now(),
-        });
-      }
-    }
-
     // Save to database (async)
     this.saveRaceToDatabase(round, winner, finalPositions).catch((err) =>
       console.error("Failed to save race:", err)
@@ -569,21 +876,36 @@ export class DuckRaceManager {
   }
 
   /**
-   * Go back to waiting phase
+   * Handle post-race: either delete room or go back to waiting
    */
-  private async goBackToWaiting(roomId: string): Promise<void> {
+  private async handlePostRace(roomId: string): Promise<void> {
     const round = this.rounds.get(roomId);
     if (!round) return;
 
     this.stopPhaseTimer(roomId);
     this.stopRaceTimer(roomId);
 
+    if (round.isPersistent) {
+      // Reset for next race
+      await this.goBackToWaiting(roomId);
+    } else {
+      // Delete room
+      this.deleteRoom(roomId);
+    }
+  }
+
+  /**
+   * Go back to waiting phase (for persistent rooms)
+   */
+  private async goBackToWaiting(roomId: string): Promise<void> {
+    const round = this.rounds.get(roomId);
+    if (!round) return;
+
     // Reset round
     const newRoundId = uuidv4();
     round.roundId = newRoundId;
     round.phase = "waiting";
     round.timeRemaining = 0;
-    round.betAmount = 0;
     round.totalPot = 0;
     round.winnerId = undefined;
     round.winnerUsername = undefined;
@@ -592,6 +914,8 @@ export class DuckRaceManager {
     // Reset player state but keep them in the room
     for (const player of round.players.values()) {
       player.hasBet = false;
+      player.isReady = false;
+      player.betAmount = 0;
       player.position = 0;
     }
 
@@ -602,83 +926,50 @@ export class DuckRaceManager {
         phase: "waiting",
         playerCount: round.players.size,
         minPlayers: DUCK_RACE_CONFIG.MIN_PLAYERS,
-        message: "Waiting for players to join and place bets...",
+        message: "Race complete! Ready up for the next race.",
       },
       timestamp: Date.now(),
     });
 
-    console.log(`⏸️ Room ${roomId} is now WAITING for players`);
+    // Update lobby
+    this.broadcastRoomUpdate(round);
+
+    console.log(`⏸️ Room ${round.roomName} is now WAITING for players`);
   }
 
   /**
-   * Handle player joining a room
+   * Delete a room
    */
-  async handlePlayerJoin(
-    userId: string,
-    username: string,
-    roomId: string = DUCK_RACE_CONFIG.DEFAULT_ROOM_ID
-  ): Promise<RaceStatePayload> {
-    const round = this.getOrCreateRound(roomId);
+  private deleteRoom(roomId: string): void {
+    const round = this.rounds.get(roomId);
+    if (!round) return;
 
-    // Check if player already exists
-    let player = round.players.get(userId);
+    this.stopPhaseTimer(roomId);
+    this.stopRaceTimer(roomId);
+    this.rounds.delete(roomId);
 
-    if (player) {
-      // Reconnecting
-      player.isConnected = true;
-      console.log(`🔄 Player ${username} reconnected to duck race ${roomId}`);
-    } else {
-      // Check max players
-      if (round.players.size >= DUCK_RACE_CONFIG.MAX_PLAYERS) {
-        throw new Error("Room is full (maximum 5 players)");
-      }
+    console.log(`🗑️ Room ${round.roomName} deleted`);
 
-      const lane = this.getNextLane(round);
-      if (lane === 0) {
-        throw new Error("No lanes available");
-      }
+    // Broadcast room deletion to lobby
+    this.broadcastToLobby({
+      type: "ROOM_DELETED",
+      payload: { roomId },
+      timestamp: Date.now(),
+    });
+  }
 
-      player = {
-        userId,
-        username,
-        joinedAt: Date.now(),
-        betAmount: 0,
-        hasBet: false,
-        position: 0,
-        lane,
-        isConnected: true,
-        color: this.getColorForLane(lane),
-      };
-
-      round.players.set(userId, player);
-      console.log(`🦆 Player ${username} joined duck race room ${roomId} in lane ${lane}`);
-    }
-
-    // Broadcast join
-    this.broadcastToRoom(
-      roomId,
-      {
-        type: "PLAYER_JOINED",
-        payload: {
-          userId,
-          username,
-          lane: player.lane,
-          color: player.color,
-          playerCount: round.players.size,
-        },
-        timestamp: Date.now(),
-      },
-      userId
-    );
-
-    // Get balance
+  /**
+   * Build room state for a user
+   */
+  private async buildRoomState(round: DuckRaceRound, userId: string): Promise<RaceStatePayload> {
+    const player = round.players.get(userId);
     const balance = await getWalletBalance(userId);
 
-    // Build room state
     const playersArray = Array.from(round.players.values()).map((p) => ({
       userId: p.userId,
       username: p.username,
       hasBet: p.hasBet,
+      isReady: p.isReady,
       position: p.position,
       lane: p.lane,
       color: p.color,
@@ -686,197 +977,31 @@ export class DuckRaceManager {
     }));
 
     return {
-      roomId,
+      roomId: round.roomId,
+      roomName: round.roomName,
       roundId: round.roundId,
       phase: round.phase,
       timeRemaining: round.timeRemaining,
       betAmount: round.betAmount,
       totalPot: round.totalPot,
+      creatorId: round.creatorId,
+      creatorUsername: round.creatorUsername,
+      isPersistent: round.isPersistent,
       players: playersArray,
       yourBalance: balance,
-      yourHasBet: player.hasBet,
-      yourLane: player.lane,
+      yourIsReady: player?.isReady ?? false,
+      yourLane: player?.lane,
     };
   }
 
   /**
-   * Handle player leaving
-   */
-  async handlePlayerLeave(userId: string, roomId: string): Promise<void> {
-    const round = this.rounds.get(roomId);
-    if (!round) return;
-
-    const player = round.players.get(userId);
-    if (!player) return;
-
-    // If player has bet and race is in progress, just mark as disconnected
-    if (player.hasBet && (round.phase === "racing" || round.phase === "countdown")) {
-      player.isConnected = false;
-      console.log(`⚠️ Player ${player.username} disconnected during race`);
-    } else {
-      // Refund if they had bet and we're still in betting/waiting
-      if (player.hasBet && (round.phase === "waiting" || round.phase === "betting")) {
-        try {
-          await updateWalletBalance(userId, round.betAmount, "win");
-          round.totalPot -= round.betAmount;
-          console.log(`💰 Refunded ${round.betAmount} CCC to ${player.username}`);
-        } catch (error) {
-          console.error(`Failed to refund ${player.username}:`, error);
-        }
-      }
-
-      round.players.delete(userId);
-      console.log(`👋 Player ${player.username} left duck race room ${roomId}`);
-    }
-
-    // Broadcast leave
-    this.broadcastToRoom(roomId, {
-      type: "PLAYER_LEFT",
-      payload: {
-        userId,
-        username: player.username,
-        playerCount: round.players.size,
-        refunded: player.hasBet,
-      },
-      timestamp: Date.now(),
-    });
-
-    // Clean up empty room
-    if (round.players.size === 0 && round.phase === "waiting") {
-      this.stopPhaseTimer(roomId);
-      this.stopRaceTimer(roomId);
-      this.rounds.delete(roomId);
-      console.log(`🗑️ Duck race room ${roomId} removed (no players)`);
-    }
-  }
-
-  /**
-   * Handle bet placement
-   */
-  async handlePlaceBet(
-    userId: string,
-    roomId: string,
-    amount: number
-  ): Promise<{ success: boolean; error?: string; newBalance?: number }> {
-    const round = this.rounds.get(roomId);
-    if (!round) {
-      return { success: false, error: "Room not found" };
-    }
-
-    // Check phase
-    if (round.phase !== "waiting" && round.phase !== "betting") {
-      return { success: false, error: "Cannot place bets now. Wait for next race." };
-    }
-
-    const player = round.players.get(userId);
-    if (!player) {
-      return { success: false, error: "Not in this room" };
-    }
-
-    if (player.hasBet) {
-      return { success: false, error: "Already placed a bet" };
-    }
-
-    // Validate amount
-    if (amount < DUCK_RACE_CONFIG.MIN_BET) {
-      return { success: false, error: `Minimum bet is ${DUCK_RACE_CONFIG.MIN_BET} CCC` };
-    }
-
-    // If betting phase started, must match the bet amount
-    if (round.phase === "betting" && amount !== round.betAmount) {
-      return {
-        success: false,
-        error: `Must bet exactly ${round.betAmount} CCC to join this race`,
-      };
-    }
-
-    // Deduct from wallet
-    try {
-      const result = await updateWalletBalance(userId, amount, "bet");
-
-      player.hasBet = true;
-      player.betAmount = amount;
-      round.totalPot += amount;
-
-      const playersWithBets = Array.from(round.players.values()).filter((p) => p.hasBet);
-
-      // First bet starts the betting countdown
-      if (round.phase === "waiting") {
-        this.startBettingCountdown(roomId, { userId, username: player.username }, amount);
-      }
-
-      // Broadcast bet
-      this.broadcastToRoom(
-        roomId,
-        {
-          type: "BET_PLACED",
-          payload: {
-            userId,
-            username: player.username,
-            betAmount: amount,
-            totalPot: round.totalPot,
-            playersWithBets: playersWithBets.length,
-          },
-          timestamp: Date.now(),
-        },
-        userId
-      );
-
-      // Send confirmation to player
-      this.sendToUser(userId, {
-        type: "BET_PLACED",
-        payload: {
-          userId,
-          username: player.username,
-          betAmount: amount,
-          totalPot: round.totalPot,
-          playersWithBets: playersWithBets.length,
-          newBalance: result.newBalance,
-        },
-        timestamp: Date.now(),
-      });
-
-      console.log(`🦆 ${player.username} placed bet of ${amount} CCC in lane ${player.lane}`);
-
-      return { success: true, newBalance: result.newBalance };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to place bet";
-      return { success: false, error: errorMessage };
-    }
-  }
-
-  /**
-   * Get current room state
+   * Get room state for a user
    */
   async getRoomState(userId: string, roomId: string): Promise<RaceStatePayload | null> {
     const round = this.rounds.get(roomId);
     if (!round) return null;
 
-    const player = round.players.get(userId);
-    const balance = await getWalletBalance(userId);
-
-    const playersArray = Array.from(round.players.values()).map((p) => ({
-      userId: p.userId,
-      username: p.username,
-      hasBet: p.hasBet,
-      position: p.position,
-      lane: p.lane,
-      color: p.color,
-      isConnected: p.isConnected,
-    }));
-
-    return {
-      roomId,
-      roundId: round.roundId,
-      phase: round.phase,
-      timeRemaining: round.timeRemaining,
-      betAmount: round.betAmount,
-      totalPot: round.totalPot,
-      players: playersArray,
-      yourBalance: balance,
-      yourHasBet: player?.hasBet ?? false,
-      yourLane: player?.lane,
-    };
+    return this.buildRoomState(round, userId);
   }
 
   /**
