@@ -433,27 +433,28 @@ export async function getUserGameHistory(
 }
 
 // ============================================
-// WALLET API (via game-engine mock)
+// WALLET API (via wallet service)
 // ============================================
 
 /**
- * Fetches the wallet balance for the current user
+ * Fetches the wallet balance for the current user from the wallet service
  * @returns Wallet balance information
  */
 export async function getWalletBalance(): Promise<WalletBalance> {
-  const response = await authenticatedFetch(
-    `${API_URL}/api/games/roulette/balance`,
-    {
-      method: "GET",
-    }
-  );
+  const response = await authenticatedFetch(`${API_URL}/api/wallet/balance`, {
+    method: "GET",
+  });
 
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || "Failed to get balance");
   }
 
-  return response.json();
+  const data = await response.json();
+  return {
+    ...data,
+    currency: "CCC",
+  };
 }
 
 // ============================================

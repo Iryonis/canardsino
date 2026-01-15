@@ -1,12 +1,18 @@
 import express from "express";
+import { createServer } from "http";
 import dotenv from "dotenv";
 import rouletteRoutes from "./routes/rouletteRoutes";
 import { Database } from "./config/database";
+import { WebSocketServerHandler } from "./websocket";
 
 dotenv.config();
 
 const app = express();
+const httpServer = createServer(app);
 const PORT = process.env.GAME_PORT;
+
+// WebSocket server instance (initialized after DB connection)
+let wsServer: WebSocketServerHandler | null = null;
 
 // Middleware
 app.use(express.json());
@@ -41,6 +47,10 @@ app.get("/health", (req, res) => {
       connected: isDbConnected,
       type: "MongoDB",
       dbName: process.env.MONGO_DB_NAME || "game_engine_db",
+    },
+    websocket: {
+      enabled: wsServer !== null,
+      connectedClients: wsServer?.getClientCount() || 0,
     },
     timestamp: new Date().toISOString(),
   };
@@ -93,11 +103,14 @@ async function startServer() {
     const db = Database.getInstance();
     await db.connect();
 
-    app.listen(PORT, () => {
+    // Initialize WebSocket server
+    wsServer = new WebSocketServerHandler(httpServer);
+
+    httpServer.listen(PORT, () => {
       console.log(`🎰 Game Engine service listening on port ${PORT}`);
       console.log(`Available games:`);
       console.log(`  🎡 Roulette - /games/roulette`);
-      console.log(`\nRoutes:`);
+      console.log(`\nHTTP Routes:`);
       console.log(`  GET    /games                          - List all games`);
       console.log(
         `  POST   /games/roulette/bets            - Place roulette bets`
@@ -110,6 +123,8 @@ async function startServer() {
         `  GET    /games/roulette/bets/:userId    - Get current bets`
       );
       console.log(`  DELETE /games/roulette/bets/:userId    - Cancel bets`);
+      console.log(`\nWebSocket:`);
+      console.log(`  WS     /games/roulette/ws              - Multiplayer roulette`);
     });
   } catch (error) {
     console.error("❌ Failed to start server:", error);
@@ -124,6 +139,11 @@ async function gracefulShutdown(signal: string): Promise<void> {
   console.log(`\n⚠️ Received ${signal}, shutting down gracefully...`);
 
   try {
+    // Cleanup WebSocket server
+    if (wsServer) {
+      wsServer.cleanup();
+    }
+
     const db = Database.getInstance();
     await db.disconnect();
     console.log("👋 Shutdown complete");

@@ -5,15 +5,22 @@ interface StatsOverviewProps {
   totalGames: number;
   winRate: number;
   netResult: number;
+  convertedNetResult?: string;
   biggestWin: number;
+  convertedBiggestWin?: string;
+  currency?: string;
 }
 
 export default function StatsOverview({
   totalGames,
   winRate,
   netResult,
+  convertedNetResult,
   biggestWin,
+  convertedBiggestWin,
 }: StatsOverviewProps) {
+  const formatCCC = (amount: number) => amount.toLocaleString('en-US');
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {/* Total Games */}
@@ -32,14 +39,24 @@ export default function StatsOverview({
       <div className="bg-blue-dark/50 backdrop-blur border border-blue p-6 rounded-lg">
         <p className="text-blue-light text-sm uppercase tracking-wider mb-2">Net Result</p>
         <p className={`text-3xl font-bold ${netResult >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-          ${netResult.toFixed(2)}
+          {formatCCC(netResult)} CCC
         </p>
+        {convertedNetResult && convertedNetResult !== '-' && (
+          <p className={`text-sm mt-1 ${netResult >= 0 ? 'text-green-400/70' : 'text-red-400/70'}`}>
+            {convertedNetResult}
+          </p>
+        )}
       </div>
 
       {/* Biggest Win */}
       <div className="bg-blue-dark/50 backdrop-blur border border-blue p-6 rounded-lg">
         <p className="text-blue-light text-sm uppercase tracking-wider mb-2">Biggest Win</p>
-        <p className="text-3xl font-bold text-green-400">${biggestWin.toFixed(2)}</p>
+        <p className="text-3xl font-bold text-green-400">{formatCCC(biggestWin)} CCC</p>
+        {convertedBiggestWin && convertedBiggestWin !== '-' && (
+          <p className="text-sm mt-1 text-green-400/70">
+            {convertedBiggestWin}
+          </p>
+        )}
       </div>
     </div>
   );

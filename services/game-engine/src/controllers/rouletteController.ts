@@ -10,9 +10,70 @@ import {
 import { GameSession, GameHistory, BigWin } from "../models";
 import { publishGameCompleted } from "../events/publisher"; 
 
-// In-memory storage for sessions and wallets (mock)
+// In-memory storage for sessions
 const sessions = new Map<string, RouletteSession>();
-const wallets = new Map<string, number>();
+
+// Wallet service configuration
+const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || "http://wallet:8002";
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || "internal_service_key";
+
+/**
+ * Get user balance from wallet service
+ */
+async function getWalletBalance(userId: string): Promise<number> {
+  try {
+    const response = await fetch(`${WALLET_SERVICE_URL}/wallet/internal/balance/${userId}`, {
+      method: "GET",
+      headers: {
+        "x-internal-api-key": INTERNAL_API_KEY,
+      },
+    });
+
+    if (!response.ok) {
+      console.error(`Wallet service error: ${response.status}`);
+      throw new Error("Failed to get balance from wallet service");
+    }
+
+    const data = await response.json();
+    return data.balance;
+  } catch (error) {
+    console.error("Error calling wallet service:", error);
+    throw error;
+  }
+}
+
+/**
+ * Update user balance in wallet service
+ * @param userId - User ID
+ * @param amount - Amount to add (win) or deduct (bet)
+ * @param type - "win" to add, "bet" to deduct
+ */
+async function updateWalletBalance(
+  userId: string,
+  amount: number,
+  type: "win" | "bet"
+): Promise<{ success: boolean; newBalance: number }> {
+  try {
+    const response = await fetch(`${WALLET_SERVICE_URL}/wallet/internal/update-balance`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-api-key": INTERNAL_API_KEY,
+      },
+      body: JSON.stringify({ userId, amount, type }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to update balance");
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error updating wallet balance:", error);
+    throw error;
+  }
+}
 
 /**
  * Minimum multiplier to be considered a "big win" (e.g., x10 means winning 10 times the bet)
@@ -112,15 +173,21 @@ export async function placeBets(req: Request, res: Response) {
       0
     );
 
-    // Check balance with mock wallet
-    const currentBalance = wallets.get(userId) || 1000;
-
-    if (currentBalance < totalAmount) {
-      return res.status(400).json({
-        error: "Insufficient balance",
-        required: totalAmount,
-        available: currentBalance,
-      });
+    // Deduct balance via wallet service
+    try {
+      const result = await updateWalletBalance(userId, totalAmount, "bet");
+      console.log(`✅ Balance deducted: ${totalAmount} CCC, new balance: ${result.newBalance}`);
+    } catch (error) {
+      // Check if it's insufficient balance
+      if (error instanceof Error && error.message === "Insufficient balance") {
+        const currentBalance = await getWalletBalance(userId);
+        return res.status(400).json({
+          error: "Insufficient balance",
+          required: totalAmount,
+          available: currentBalance,
+        });
+      }
+      throw error;
     }
 
     // Create or update session
@@ -183,10 +250,18 @@ export async function spin(req: Request, res: Response) {
       source
     );
 
-    // Update mock wallet
-    const currentBalance = wallets.get(userId) || 1000;
-    const newBalance = currentBalance + gameResult.netResult;
-    wallets.set(userId, newBalance);
+    // Credit winnings to wallet service (if player won)
+    // Note: The bet was already deducted in placeBets()
+    // totalWin includes the original bet amount for winning bets
+    if (gameResult.totalWin > 0) {
+      try {
+        const result = await updateWalletBalance(userId, gameResult.totalWin, "win");
+        console.log(`✅ Winnings credited: ${gameResult.totalWin} CCC, new balance: ${result.newBalance}`);
+      } catch (error) {
+        console.error("❌ Failed to credit winnings:", error);
+        // Don't fail the spin, but log the error
+      }
+    }
 
     // Clear session
     sessions.delete(userId);
@@ -504,18 +579,18 @@ export async function getCurrentBets(req: Request, res: Response) {
 }
 
 /**
- * Get mock wallet balance
+ * Get user balance from wallet service
  * @param req - Express request
  * @param res - Express response
  */
-export function getBalance(req: Request, res: Response) {
+export async function getBalance(req: Request, res: Response) {
   try {
     const userId = getUserIdFromToken(req);
     if (!userId) {
       return res.status(401).json({ error: "Unauthorized - Invalid token" });
     }
 
-    const balance = wallets.get(userId) || 1000;
+    const balance = await getWalletBalance(userId);
     res.json({ balance });
   } catch (error) {
     console.error("Error getting balance:", error);

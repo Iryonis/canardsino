@@ -2,20 +2,19 @@
 
 import Link from "next/link";
 import { useAuth } from "../../hooks/useAuth";
+import { BalanceUSD } from "../prices/BalanceUSD";
 
 export const LoggedNav = ({ balance }: { balance: number }) => {
   const { logout, user } = useAuth();
   return (
     <div className="flex items-center gap-4">
-      <span className="text-blue-light">
-        Welcome {user?.username}{" "}
-        {balance > 0 && `: 💰 Balance: ${balance} coins`}
-      </span>
+      <span className="text-blue-light">Welcome {user?.username}</span>
+      {balance > 0 && <BalanceUSD cccBalance={balance} />}
       <Link
-        href="/games-page"
-        className="px-4 py-2 bg-gradient-to-r from-green-600 to-blue-green-500 hover:from-green-500 hover:to-green-400 text-white font-medium rounded-lg transition-all duration-300 shadow-lg hover:shadow-green-600/50"
+        href="/buy"
+        className="px-4 py-2 bg-gradient-to-r from-blue-light to-blue-lightest text-blue-darkest font-semibold rounded-lg hover:opacity-90 transition"
       >
-        Games
+        Buy CCC
       </Link>
       <Link
         href="/stats-sse"
