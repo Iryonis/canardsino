@@ -10,7 +10,7 @@ export const LoggedNav = ({ balance }: { balance: number }) => {
     <div className="flex items-center gap-4">
       <span className="text-blue-light">Welcome {user?.username}</span>
       {balance > 0 && <BalanceUSD cccBalance={balance} />}
-      <Link href="/" className="btn group">
+      <Link href="/buy" className="btn group">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
