@@ -57,20 +57,34 @@ export default function Home() {
                 </div>
               </div>
               <div className="mt-6 pt-6 border-t border-blue">
-                <p className="text-blue-light text-sm">
+                <p className="text-blue-light text-sm mb-4">
                   Ready to play some games?
                 </p>
-                <Link
-                  href="/roulette"
-                  className="mt-4 block w-full py-3 bg-gradient-to-r from-blue to-blue-light hover:from-blue-light hover:to-blue-lightest text-blue-darkest font-bold rounded-lg transition text-center"
-                >
-                  🎰 Go to Roulette
-                </Link>
+                <div className="grid gap-3">
+                  <Link
+                    href="/roulette"
+                    className="block w-full py-3 bg-gradient-to-r from-blue to-blue-light hover:from-blue-light hover:to-blue-lightest text-blue-darkest font-bold rounded-lg transition text-center"
+                  >
+                    🎰 Roulette Solo
+                  </Link>
+                  <Link
+                    href="/roulette-multiplayer"
+                    className="block w-full py-3 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-bold rounded-lg transition text-center"
+                  >
+                    🎡 Roulette Multiplayer
+                  </Link>
+                  <Link
+                    href="/duck-race"
+                    className="block w-full py-3 bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-white font-bold rounded-lg transition text-center"
+                  >
+                    🦆 Duck Race
+                  </Link>
+                </div>
               </div>
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="grid md:grid-cols-3 gap-6 mt-12">
+              <div className="grid md:grid-cols-4 gap-6 mt-12">
                 <div className="bg-blue-dark rounded-xl p-6 border border-blue">
                   <div className="text-4xl mb-3">🎲</div>
                   <h3 className="text-xl font-bold text-blue-lightest mb-2">
@@ -78,6 +92,15 @@ export default function Home() {
                   </h3>
                   <p className="text-blue-light">
                     Classic casino game with fair odds
+                  </p>
+                </div>
+                <div className="bg-blue-dark rounded-xl p-6 border border-blue border-yellow-500/50">
+                  <div className="text-4xl mb-3">🦆</div>
+                  <h3 className="text-xl font-bold text-yellow-400 mb-2">
+                    Duck Race
+                  </h3>
+                  <p className="text-blue-light">
+                    Multiplayer racing - winner takes all!
                   </p>
                 </div>
                 <div className="bg-blue-dark rounded-xl p-6 border border-blue">
