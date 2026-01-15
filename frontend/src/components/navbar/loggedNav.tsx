@@ -10,22 +10,31 @@ export const LoggedNav = ({ balance }: { balance: number }) => {
     <div className="flex items-center gap-4">
       <span className="text-blue-light">Welcome {user?.username}</span>
       {balance > 0 && <BalanceUSD cccBalance={balance} />}
-      <Link
-        href="/buy"
-        className="px-4 py-2 bg-gradient-to-r from-blue-light to-blue-lightest text-blue-darkest font-semibold rounded-lg hover:opacity-90 transition"
-      >
-        Buy CCC
+      <Link href="/" className="btn group">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={1.5}
+          stroke="currentColor"
+          className="size-6 group-hover:rotate-90 group-active:scale-150 transition-transform"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 4.5v15m7.5-7.5h-15"
+          />
+        </svg>
       </Link>
-      <Link
-        href="/stats-sse"
-        className="px-4 py-2 bg-gradient-to-r from-blue to-blue-light hover:from-blue-light hover:to-blue-lightest text-white font-medium rounded-lg transition-all duration-300 shadow-lg hover:shadow-blue-light/50"
-      >
+      <hr className="border border-gray-300 my-2" />
+      <Link href="/games-page" className="btn btn-green">
+        Games
+      </Link>
+      <Link href="/stats-sse" className="btn btn-blue">
         My Stats
       </Link>
-      <button
-        onClick={logout}
-        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
-      >
+      <hr className="border border-gray-300 my-2" />
+      <button onClick={logout} className="btn btn-red">
         Logout
       </button>
     </div>
