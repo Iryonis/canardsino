@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useChainId, useSwitchChain, useSendTransaction } from "wagmi";
 import { parseUnits, formatUnits, parseEther, formatEther } from "viem";
 import { useAuth } from "@/hooks/useAuth";
@@ -119,13 +119,6 @@ export function BuyForm() {
     hash: txHash,
   });
 
-  // Process deposit after transaction confirms
-  useEffect(() => {
-    if (isConfirmed && txHash && !isProcessing) {
-      processDeposit(txHash);
-    }
-  }, [isConfirmed, txHash, isProcessing]);
-
   // Update estimated CCC when amount or token changes
   useEffect(() => {
     const num = parseFloat(amount);
@@ -146,7 +139,7 @@ export function BuyForm() {
     setEstimatedCCC(ccc);
   }, [amount, selectedToken, getPrice, tokenConfig.priceSymbol]);
 
-  const processDeposit = async (hash: string) => {
+  const processDeposit = useCallback(async (hash: string) => {
     setIsProcessing(true);
     try {
       const token = getAccessToken();
@@ -184,7 +177,14 @@ export function BuyForm() {
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [address, getAccessToken, refetchBalance, selectedToken]);
+
+  // Process deposit after transaction confirms
+  useEffect(() => {
+    if (isConfirmed && txHash && !isProcessing) {
+      processDeposit(txHash);
+    }
+  }, [isConfirmed, txHash, isProcessing, processDeposit]);
 
   const handleDeposit = async () => {
     setError(null);

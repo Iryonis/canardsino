@@ -24,7 +24,7 @@ export default function StatsSsePage() {
   useEffect(() => {
     if (isAuthenticated && user) {
       getWalletBalance()
-        .then((bal) => setBalance(bal))
+        .then((bal) => setBalance(bal.balance))
         .catch((err) => console.error('Error fetching balance:', err));
     }
   }, [isAuthenticated, user]);
