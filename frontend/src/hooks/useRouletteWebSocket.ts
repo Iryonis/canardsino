@@ -145,9 +145,21 @@ export type ServerMessage =
   | { type: "BET_PLACED"; payload: BetPlacedPayload; timestamp: number }
   | { type: "BET_REMOVED"; payload: BetRemovedPayload; timestamp: number }
   | { type: "BETS_CLEARED"; payload: BetsClearedPayload; timestamp: number }
-  | { type: "BETTING_STARTED"; payload: BettingStartedPayload; timestamp: number }
-  | { type: "WAITING_FOR_BETS"; payload: WaitingForBetsPayload; timestamp: number }
-  | { type: "ROUND_COUNTDOWN"; payload: RoundCountdownPayload; timestamp: number }
+  | {
+      type: "BETTING_STARTED";
+      payload: BettingStartedPayload;
+      timestamp: number;
+    }
+  | {
+      type: "WAITING_FOR_BETS";
+      payload: WaitingForBetsPayload;
+      timestamp: number;
+    }
+  | {
+      type: "ROUND_COUNTDOWN";
+      payload: RoundCountdownPayload;
+      timestamp: number;
+    }
   | { type: "SPIN_STARTING"; payload: SpinStartingPayload; timestamp: number }
   | { type: "SPIN_RESULT"; payload: SpinResultPayload; timestamp: number }
   | { type: "ERROR"; payload: ErrorPayload; timestamp: number }
@@ -157,7 +169,15 @@ export type ServerMessage =
 export type ClientMessage =
   | { type: "JOIN_ROOM"; payload?: { roomId?: string } }
   | { type: "LEAVE_ROOM"; payload?: { roomId?: string } }
-  | { type: "PLACE_BET"; payload: { type: string; value?: string | number; amount: number; numbers?: number[] } }
+  | {
+      type: "PLACE_BET";
+      payload: {
+        type: string;
+        value?: string | number;
+        amount: number;
+        numbers?: number[];
+      };
+    }
   | { type: "REMOVE_BET"; payload: { betIndex: number } }
   | { type: "CLEAR_BETS" }
   | { type: "PING" };
@@ -182,16 +202,24 @@ export interface UseRouletteWebSocketReturn {
   isConnected: boolean;
   connect: () => void;
   disconnect: () => void;
-  placeBet: (bet: { type: string; value?: string | number; amount: number; numbers?: number[] }) => void;
+  placeBet: (bet: {
+    type: string;
+    value?: string | number;
+    amount: number;
+    numbers?: number[];
+  }) => void;
   removeBet: (betIndex: number) => void;
   clearBets: () => void;
   joinRoom: (roomId?: string) => void;
   leaveRoom: () => void;
 }
 
-const WS_URL = typeof window !== "undefined"
-  ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/games/roulette/ws`
-  : "";
+const WS_URL =
+  typeof window !== "undefined"
+    ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${
+        window.location.host
+      }/api/games/roulette/ws`
+    : "";
 
 const RECONNECT_DELAY = 1000;
 const MAX_RECONNECT_DELAY = 30000;
@@ -205,12 +233,16 @@ export function useRouletteWebSocket(
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectDelayRef = useRef(RECONNECT_DELAY);
   const manualDisconnectRef = useRef(false);
+  const connectRef = useRef<(() => void) | null>(null);
 
   const [isConnected, setIsConnected] = useState(false);
 
   // Store callbacks in refs to avoid stale closures
   const optionsRef = useRef(options);
-  optionsRef.current = options;
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   const clearTimers = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -282,8 +314,10 @@ export function useRouletteWebSocket(
 
   const connect = useCallback(() => {
     // Don't connect if already connected or connecting
-    if (wsRef.current?.readyState === WebSocket.OPEN ||
-        wsRef.current?.readyState === WebSocket.CONNECTING) {
+    if (
+      wsRef.current?.readyState === WebSocket.OPEN ||
+      wsRef.current?.readyState === WebSocket.CONNECTING
+    ) {
       return;
     }
 
@@ -291,7 +325,10 @@ export function useRouletteWebSocket(
     const token = tokenManager.getAccessToken();
     if (!token) {
       console.error("No access token available for WebSocket connection");
-      optionsRef.current.onError?.({ code: "AUTH_ERROR", message: "No access token available for WebSocket connection" });
+      optionsRef.current.onError?.({
+        code: "AUTH_ERROR",
+        message: "No access token available for WebSocket connection",
+      });
       return;
     }
 
@@ -315,8 +352,8 @@ export function useRouletteWebSocket(
 
     ws.onmessage = handleMessage;
 
-    ws.onclose = (event) => {
-      console.log("WebSocket closed:", event.code, event.reason);
+    ws.onclose = () => {
+      console.log("WebSocket closed");
       setIsConnected(false);
       optionsRef.current.onConnectionChange?.(false);
       clearTimers();
@@ -325,7 +362,9 @@ export function useRouletteWebSocket(
       if (!manualDisconnectRef.current) {
         reconnectTimeoutRef.current = setTimeout(() => {
           console.log(`Reconnecting in ${reconnectDelayRef.current}ms...`);
-          connect();
+          if (connectRef.current) {
+            connectRef.current();
+          }
           // Exponential backoff
           reconnectDelayRef.current = Math.min(
             reconnectDelayRef.current * 2,
@@ -340,6 +379,10 @@ export function useRouletteWebSocket(
     };
   }, [handleMessage, sendMessage, clearTimers]);
 
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
+
   const disconnect = useCallback(() => {
     manualDisconnectRef.current = true;
     clearTimers();
@@ -351,30 +394,44 @@ export function useRouletteWebSocket(
     setIsConnected(false);
   }, [clearTimers]);
 
-  const placeBet = useCallback((bet: { type: string; value?: string | number; amount: number; numbers?: number[] }) => {
-    sendMessage({
-      type: "PLACE_BET",
-      payload: bet,
-    });
-  }, [sendMessage]);
+  const placeBet = useCallback(
+    (bet: {
+      type: string;
+      value?: string | number;
+      amount: number;
+      numbers?: number[];
+    }) => {
+      sendMessage({
+        type: "PLACE_BET",
+        payload: bet,
+      });
+    },
+    [sendMessage]
+  );
 
-  const removeBet = useCallback((betIndex: number) => {
-    sendMessage({
-      type: "REMOVE_BET",
-      payload: { betIndex },
-    });
-  }, [sendMessage]);
+  const removeBet = useCallback(
+    (betIndex: number) => {
+      sendMessage({
+        type: "REMOVE_BET",
+        payload: { betIndex },
+      });
+    },
+    [sendMessage]
+  );
 
   const clearBets = useCallback(() => {
     sendMessage({ type: "CLEAR_BETS" });
   }, [sendMessage]);
 
-  const joinRoom = useCallback((roomId?: string) => {
-    sendMessage({
-      type: "JOIN_ROOM",
-      payload: roomId ? { roomId } : undefined,
-    });
-  }, [sendMessage]);
+  const joinRoom = useCallback(
+    (roomId?: string) => {
+      sendMessage({
+        type: "JOIN_ROOM",
+        payload: roomId ? { roomId } : undefined,
+      });
+    },
+    [sendMessage]
+  );
 
   const leaveRoom = useCallback(() => {
     sendMessage({ type: "LEAVE_ROOM" });

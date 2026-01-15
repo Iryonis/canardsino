@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useLayoutEffect } from "react";
 
 /**
  * Order of numbers on European roulette wheel (clockwise)
@@ -45,9 +45,8 @@ export default function RouletteWheel({
   const [rotation, setRotation] = useState(0);
   const [displayNumber, setDisplayNumber] = useState<number | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isSpinning && winningNumber !== null) {
-      setDisplayNumber(null);
       // Degrees per slot
       const degreesPerSlot = 360 / wheelOrder.length;
 
@@ -72,10 +71,18 @@ export default function RouletteWheel({
         // Total rotation for this spin
         return prev + fullRotations * 360 + deltaToTarget;
       });
+    } else {
+      setDisplayNumber(null);
+    }
+  }, [isSpinning, winningNumber]);
 
-      setTimeout(() => {
+  useEffect(() => {
+    if (isSpinning && winningNumber !== null) {
+      const timer = setTimeout(() => {
         setDisplayNumber(winningNumber);
       }, 5000);
+
+      return () => clearTimeout(timer);
     }
   }, [isSpinning, winningNumber]);
 

@@ -1,12 +1,21 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useChainId, useSwitchChain, useSendTransaction } from "wagmi";
-import { parseUnits, formatUnits, parseEther, formatEther } from "viem";
+import {
+  useAccount,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+  useReadContract,
+  useChainId,
+  useSwitchChain,
+  useSendTransaction,
+} from "wagmi";
+import { parseUnits, formatUnits, parseEther } from "viem";
 import { useAuth } from "@/hooks/useAuth";
 import { useCryptoPrices } from "@/hooks/useCryptoPrices";
 
-const HOT_WALLET_ADDRESS = (process.env.NEXT_PUBLIC_HOT_WALLET_ADDRESS || "0x2681E0C15de88E0957383dD322e4cF5d8DBD28Bb") as `0x${string}`;
+const HOT_WALLET_ADDRESS = (process.env.NEXT_PUBLIC_HOT_WALLET_ADDRESS ||
+  "0x2681E0C15de88E0957383dD322e4cF5d8DBD28Bb") as `0x${string}`;
 const POLYGON_CHAIN_ID = 137;
 
 // Token configurations
@@ -61,7 +70,8 @@ const ERC20_ABI = [
 ] as const;
 
 export function BuyForm() {
-  const [selectedToken, setSelectedToken] = useState<DepositTokenSymbol>("USDC");
+  const [selectedToken, setSelectedToken] =
+    useState<DepositTokenSymbol>("USDC");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -87,20 +97,21 @@ export function BuyForm() {
     query: { enabled: !!address && !isNativeToken },
   });
 
-  // For native POL, we need to use useBalance from wagmi
-  const { data: nativeBalance } = useReadContract({
-    address: isNativeToken ? undefined : tokenConfig.address,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: false }, // Disabled, we use sendTransaction for native
-  });
-
   // Write contract for ERC20 transfer
-  const { writeContract, data: erc20TxHash, isPending: isERC20Pending, error: writeError } = useWriteContract();
+  const {
+    writeContract,
+    data: erc20TxHash,
+    isPending: isERC20Pending,
+    error: writeError,
+  } = useWriteContract();
 
   // Send transaction for native POL transfer
-  const { sendTransaction, data: nativeTxHash, isPending: isNativePending, error: sendError } = useSendTransaction();
+  const {
+    sendTransaction,
+    data: nativeTxHash,
+    isPending: isNativePending,
+    error: sendError,
+  } = useSendTransaction();
 
   const txHash = isNativeToken ? nativeTxHash : erc20TxHash;
   const isWritePending = isNativeToken ? isNativePending : isERC20Pending;
@@ -115,9 +126,10 @@ export function BuyForm() {
   }, [txError]);
 
   // Wait for transaction confirmation
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
-    hash: txHash,
-  });
+  const { isLoading: isConfirming, isSuccess: isConfirmed } =
+    useWaitForTransactionReceipt({
+      hash: txHash,
+    });
 
   // Update estimated CCC when amount or token changes
   useEffect(() => {
@@ -139,45 +151,50 @@ export function BuyForm() {
     setEstimatedCCC(ccc);
   }, [amount, selectedToken, getPrice, tokenConfig.priceSymbol]);
 
-  const processDeposit = useCallback(async (hash: string) => {
-    setIsProcessing(true);
-    try {
-      const token = getAccessToken();
-      if (!token) {
-        setError("Please log in to deposit");
-        return;
+  const processDeposit = useCallback(
+    async (hash: string) => {
+      setIsProcessing(true);
+      try {
+        const token = getAccessToken();
+        if (!token) {
+          setError("Please log in to deposit");
+          return;
+        }
+
+        const response = await fetch("/api/wallet/deposit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            txHash: hash,
+            walletAddress: address,
+            cryptoSymbol: selectedToken,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setError(data.error || "Failed to process deposit");
+          return;
+        }
+
+        setSuccess(
+          `Deposit successful! +${data.transaction.amount.toLocaleString()} CCC`
+        );
+        setAmount("");
+        refetchBalance();
+      } catch (err) {
+        console.error("Error processing deposit:", err);
+        setError("Failed to process deposit");
+      } finally {
+        setIsProcessing(false);
       }
-
-      const response = await fetch("/api/wallet/deposit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          txHash: hash,
-          walletAddress: address,
-          cryptoSymbol: selectedToken,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || "Failed to process deposit");
-        return;
-      }
-
-      setSuccess(`Deposit successful! +${data.transaction.amount.toLocaleString()} CCC`);
-      setAmount("");
-      refetchBalance();
-    } catch (err) {
-      console.error("Error processing deposit:", err);
-      setError("Failed to process deposit");
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [address, getAccessToken, refetchBalance, selectedToken]);
+    },
+    [address, getAccessToken, refetchBalance, selectedToken]
+  );
 
   // Process deposit after transaction confirms
   useEffect(() => {
@@ -221,9 +238,10 @@ export function BuyForm() {
   };
 
   const isPending = isWritePending || isConfirming || isProcessing;
-  const formattedBalance = tokenBalance && !isNativeToken
-    ? formatUnits(tokenBalance, tokenConfig.decimals)
-    : "0";
+  const formattedBalance =
+    tokenBalance && !isNativeToken
+      ? formatUnits(tokenBalance, tokenConfig.decimals)
+      : "0";
   const currentPrice = getPrice(tokenConfig.priceSymbol);
 
   if (!isConnected) {
@@ -250,36 +268,44 @@ export function BuyForm() {
 
   return (
     <div className="p-6 bg-blue-dark rounded-lg border border-blue">
-      <h3 className="text-xl font-bold text-blue-lightest mb-4">Deposit Crypto</h3>
+      <h3 className="text-xl font-bold text-blue-lightest mb-4">
+        Deposit Crypto
+      </h3>
 
       {/* Token selector */}
       <div className="mb-4">
-        <label className="block text-sm text-blue-light mb-2">Select Token</label>
+        <label className="block text-sm text-blue-light mb-2">
+          Select Token
+        </label>
         <div className="grid grid-cols-4 gap-2">
-          {(Object.keys(DEPOSIT_TOKENS) as DepositTokenSymbol[]).map((symbol) => (
-            <button
-              key={symbol}
-              onClick={() => {
-                setSelectedToken(symbol);
-                setAmount("");
-                setError(null);
-                setSuccess(null);
-              }}
-              disabled={isPending}
-              className={`px-3 py-2 rounded-lg font-medium transition-all ${
-                selectedToken === symbol
-                  ? "bg-blue-light text-blue-darkest"
-                  : "bg-blue-darkest text-blue-light border border-blue hover:border-blue-light"
-              } disabled:opacity-50`}
-            >
-              {symbol}
-            </button>
-          ))}
+          {(Object.keys(DEPOSIT_TOKENS) as DepositTokenSymbol[]).map(
+            (symbol) => (
+              <button
+                key={symbol}
+                onClick={() => {
+                  setSelectedToken(symbol);
+                  setAmount("");
+                  setError(null);
+                  setSuccess(null);
+                }}
+                disabled={isPending}
+                className={`px-3 py-2 rounded-lg font-medium transition-all ${
+                  selectedToken === symbol
+                    ? "bg-blue-light text-blue-darkest"
+                    : "bg-blue-darkest text-blue-light border border-blue hover:border-blue-light"
+                } disabled:opacity-50`}
+              >
+                {symbol}
+              </button>
+            )
+          )}
         </div>
       </div>
 
       <div className="mb-4">
-        <label className="block text-sm text-blue-light mb-2">Amount ({selectedToken})</label>
+        <label className="block text-sm text-blue-light mb-2">
+          Amount ({selectedToken})
+        </label>
         <input
           type="number"
           value={amount}
@@ -290,13 +316,21 @@ export function BuyForm() {
           }}
           placeholder="0.00"
           min="0"
-          step={selectedToken === "POL" || selectedToken === "WETH" ? "0.0001" : "0.01"}
+          step={
+            selectedToken === "POL" || selectedToken === "WETH"
+              ? "0.0001"
+              : "0.01"
+          }
           disabled={isPending}
           className="w-full px-4 py-3 bg-blue-darkest border border-blue rounded-lg text-white placeholder-blue focus:outline-none focus:border-blue-light disabled:opacity-50"
         />
         {!isNativeToken && (
           <p className="text-xs text-blue mt-1">
-            Available: {parseFloat(formattedBalance).toFixed(tokenConfig.decimals === 6 ? 2 : 4)} {selectedToken}
+            Available:{" "}
+            {parseFloat(formattedBalance).toFixed(
+              tokenConfig.decimals === 6 ? 2 : 4
+            )}{" "}
+            {selectedToken}
           </p>
         )}
       </div>
@@ -308,7 +342,9 @@ export function BuyForm() {
         </p>
         {currentPrice !== null && (
           <p className="text-xs text-blue mt-1">
-            Rate: 1 {selectedToken} = ${currentPrice.toFixed(selectedToken === "POL" ? 4 : 2)} = {Math.floor(currentPrice * 1000).toLocaleString()} CCC
+            Rate: 1 {selectedToken} = $
+            {currentPrice.toFixed(selectedToken === "POL" ? 4 : 2)} ={" "}
+            {Math.floor(currentPrice * 1000).toLocaleString()} CCC
           </p>
         )}
       </div>

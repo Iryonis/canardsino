@@ -81,6 +81,7 @@ export default function RoulettePage() {
   const [maxPotentialWin, setMaxPotentialWin] = useState(0);
 
   // Fireworks controller
+  /* eslint-disable  @typescript-eslint/no-explicit-any */
   const fireworksController = useRef<any>(null);
 
   // Configuration from backend

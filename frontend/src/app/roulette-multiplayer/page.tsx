@@ -52,19 +52,22 @@ function formatTime(seconds: number): string {
 /**
  * Get phase display text and color
  */
-function getPhaseDisplay(phase: string, triggeredBy?: { username: string } | null): { text: string; subtext?: string; color: string } {
+function getPhaseDisplay(
+  phase: string,
+  triggeredBy?: { username: string } | null
+): { text: string; subtext?: string; color: string } {
   switch (phase) {
     case "waiting":
       return {
         text: "Waiting for Bets",
         subtext: "Place a bet to start the countdown!",
-        color: "text-blue-light"
+        color: "text-blue-light",
       };
     case "betting":
       return {
         text: "Place Your Bets!",
         subtext: triggeredBy ? `Started by ${triggeredBy.username}` : undefined,
-        color: "text-green-400"
+        color: "text-green-400",
       };
     case "spinning":
       return { text: "No More Bets!", color: "text-yellow-400" };
@@ -92,7 +95,9 @@ function PlayersList() {
           <div
             key={player.userId}
             className={`flex items-center justify-between text-sm p-2 rounded ${
-              player.isConnected ? "bg-blue-dark/50" : "bg-gray-700/50 opacity-60"
+              player.isConnected
+                ? "bg-blue-dark/50"
+                : "bg-gray-700/50 opacity-60"
             }`}
           >
             <span className="text-blue-lightest truncate">
@@ -328,7 +333,8 @@ function ConnectionStatus() {
 
   if (state.isConnected) return null;
 
-  const isAuthError = state.error?.includes("No access token") || state.error?.includes("token");
+  const isAuthError =
+    state.error?.includes("No access token") || state.error?.includes("token");
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
@@ -496,8 +502,12 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
   // Handle error from context
   useEffect(() => {
     if (state.error) {
-      setBetError(state.error);
-      setTimeout(() => setBetError(""), 5000);
+      const timer = setTimeout(() => {
+        setBetError(state.error);
+        const clearTimer = setTimeout(() => setBetError(""), 5000);
+        return () => clearTimeout(clearTimer);
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [state.error]);
 

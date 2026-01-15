@@ -6,7 +6,7 @@ export interface ConfettiDuckProps {
   onComplete?: () => void;
 }
 
-let canard = confetti.shapeFromText({ text: "🦆", scalar: 2 });
+const canard = confetti.shapeFromText({ text: "🦆", scalar: 2 });
 
 export default function ConfettiDuck({
   trigger,
