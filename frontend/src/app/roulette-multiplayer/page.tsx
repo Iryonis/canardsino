@@ -54,7 +54,7 @@ function formatTime(seconds: number): string {
  */
 function getPhaseDisplay(
   phase: string,
-  triggeredBy?: { username: string } | null
+  triggeredBy?: { username: string } | null,
 ): { text: string; subtext?: string; color: string } {
   switch (phase) {
     case "waiting":
@@ -250,8 +250,8 @@ function ResultsPanel() {
               spinResult.color === "red"
                 ? "text-red-500"
                 : spinResult.color === "black"
-                ? "text-gray-300"
-                : "text-green-500"
+                  ? "text-gray-300"
+                  : "text-green-500"
             }
           >
             {spinResult.winningNumber}
@@ -268,8 +268,8 @@ function ResultsPanel() {
             yourResult.netResult > 0
               ? "bg-green-600/30 border border-green-500"
               : yourResult.netResult < 0
-              ? "bg-red-600/30 border border-red-500"
-              : "bg-blue-dark/30 border border-blue"
+                ? "bg-red-600/30 border border-red-500"
+                : "bg-blue-dark/30 border border-blue"
           }`}
         >
           <div className="text-lg font-bold">
@@ -312,8 +312,8 @@ function ResultsPanel() {
                     result.netResult > 0
                       ? "text-green-400"
                       : result.netResult < 0
-                      ? "text-red-400"
-                      : "text-blue-light"
+                        ? "text-red-400"
+                        : "text-blue-light"
                   }
                 >
                   {result.netResult > 0 ? "+" : ""}
@@ -431,7 +431,7 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
 
       placeBet({ type, amount: betAmount });
     },
-    [state.canBet, betAmount, placeBet, betLocked]
+    [state.canBet, betAmount, placeBet, betLocked],
   );
 
   /**
@@ -453,7 +453,7 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
 
       placeBet({ type, value, amount: betAmount });
     },
-    [state.canBet, betAmount, placeBet, betLocked]
+    [state.canBet, betAmount, placeBet, betLocked],
   );
 
   /**
@@ -543,10 +543,12 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
 
   // Handle wheel animation when spinning starts
   useEffect(() => {
+    console.log(state.phase, state.spinResult);
     if (state.phase === "spinning" && state.spinResult) {
       // Set winning number and trigger spin animation
       setWinningNumber(state.spinResult.winningNumber);
       setMustSpin(true);
+      console.log(mustSpin, winningNumber);
 
       // Stop spinning after animation completes (5 seconds)
       const timer = setTimeout(() => {
@@ -689,7 +691,9 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
                 betAmount={betAmount}
                 onBetAmountChange={(amount) =>
                   setBetAmount(
-                    typeof amount === "string" ? state.yourBalance || 0 : amount
+                    typeof amount === "string"
+                      ? state.yourBalance || 0
+                      : amount,
                   )
                 }
               />

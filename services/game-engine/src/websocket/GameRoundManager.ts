@@ -48,7 +48,7 @@ async function getWalletBalance(userId: string): Promise<number> {
         headers: {
           "x-internal-api-key": INTERNAL_API_KEY,
         },
-      }
+      },
     );
 
     if (!response.ok) {
@@ -70,7 +70,7 @@ async function getWalletBalance(userId: string): Promise<number> {
 async function updateWalletBalance(
   userId: string,
   amount: number,
-  type: "win" | "bet"
+  type: "win" | "bet",
 ): Promise<{ success: boolean; newBalance: number }> {
   try {
     const response = await fetch(
@@ -82,7 +82,7 @@ async function updateWalletBalance(
           "x-internal-api-key": INTERNAL_API_KEY,
         },
         body: JSON.stringify({ userId, amount, type }),
-      }
+      },
     );
 
     if (!response.ok) {
@@ -112,7 +112,7 @@ export class GameRoundManager {
   private broadcastToRoom: (
     roomId: string,
     message: ServerMessage,
-    excludeUserId?: string
+    excludeUserId?: string,
   ) => void;
 
   /** Send to specific user function */
@@ -122,9 +122,9 @@ export class GameRoundManager {
     broadcastToRoom: (
       roomId: string,
       message: ServerMessage,
-      excludeUserId?: string
+      excludeUserId?: string,
     ) => void,
-    sendToUser: (userId: string, message: ServerMessage) => void
+    sendToUser: (userId: string, message: ServerMessage) => void,
   ) {
     this.broadcastToRoom = broadcastToRoom;
     this.sendToUser = sendToUser;
@@ -157,7 +157,7 @@ export class GameRoundManager {
    */
   private startBettingCountdown(
     roomId: string,
-    triggeredBy: { userId: string; username: string }
+    triggeredBy: { userId: string; username: string },
   ): void {
     const round = this.rounds.get(roomId);
     if (!round) return;
@@ -171,7 +171,7 @@ export class GameRoundManager {
     round.bettingStartedAt = Date.now();
 
     console.log(
-      `⏱️ Betting countdown started by ${triggeredBy.username} in room ${roomId}`
+      `⏱️ Betting countdown started by ${triggeredBy.username} in room ${roomId}`,
     );
 
     // Broadcast that betting phase has started
@@ -269,7 +269,7 @@ export class GameRoundManager {
 
     // Get players with bets
     const playersWithBets = Array.from(round.players.values()).filter(
-      (p) => p.bets.length > 0
+      (p) => p.bets.length > 0,
     );
 
     // If no one has bets (all cancelled), go back to waiting
@@ -283,7 +283,7 @@ export class GameRoundManager {
     const winningNumber = Math.floor(Math.random() * 37);
     const source = "mock-random";
     const spinResult = RouletteLogic.analyzeWinningNumber(winningNumber);
-    
+
     // Store it in the round
     round.spinResult = spinResult;
 
@@ -293,7 +293,7 @@ export class GameRoundManager {
 
     const totalBetsAllPlayers = playersWithBets.reduce(
       (sum, p) => sum + p.totalBet,
-      0
+      0,
     );
 
     this.broadcastToRoom(roomId, {
@@ -303,12 +303,13 @@ export class GameRoundManager {
         phase: "spinning",
         totalBetsAllPlayers,
         playersWithBets: playersWithBets.length,
+        winningNumber,
       },
       timestamp: Date.now(),
     });
 
     console.log(
-      `🎡 Spinning phase started for room ${roomId} with ${playersWithBets.length} players - winning number: ${winningNumber}`
+      `🎡 Spinning phase started for room ${roomId} with ${playersWithBets.length} players - winning number: ${winningNumber}`,
     );
   }
 
@@ -343,7 +344,7 @@ export class GameRoundManager {
       const gameResult = RouletteLogic.calculateGameResult(
         player.bets,
         winningNumber,
-        source
+        source,
       );
 
       const playerResult: PlayerResult = {
@@ -374,16 +375,16 @@ export class GameRoundManager {
           const result = await updateWalletBalance(
             userId,
             gameResult.totalWin,
-            "win"
+            "win",
           );
           newBalance = result.newBalance;
           console.log(
-            `✅ Credited ${gameResult.totalWin} CCC to ${player.username}`
+            `✅ Credited ${gameResult.totalWin} CCC to ${player.username}`,
           );
         } catch (error) {
           console.error(
             `❌ Failed to credit winnings to ${player.username}:`,
-            error
+            error,
           );
         }
       } else {
@@ -418,7 +419,7 @@ export class GameRoundManager {
         sessionId,
         gameResult,
         player.bets,
-        roomId
+        roomId,
       ).catch((err) => console.error("Failed to save game:", err));
     }
 
@@ -499,7 +500,7 @@ export class GameRoundManager {
   async handlePlayerJoin(
     userId: string,
     username: string,
-    roomId: string = MULTIPLAYER_CONFIG.DEFAULT_ROOM_ID
+    roomId: string = MULTIPLAYER_CONFIG.DEFAULT_ROOM_ID,
   ): Promise<RoomStatePayload> {
     const round = this.getOrCreateRound(roomId);
 
@@ -537,7 +538,7 @@ export class GameRoundManager {
         },
         timestamp: Date.now(),
       },
-      userId // Exclude the joining player
+      userId, // Exclude the joining player
     );
 
     // Get player balance
@@ -583,7 +584,7 @@ export class GameRoundManager {
     ) {
       player.isConnected = false;
       console.log(
-        `⚠️ Player ${player.username} disconnected but has active bets`
+        `⚠️ Player ${player.username} disconnected but has active bets`,
       );
     } else {
       round.players.delete(userId);
@@ -620,7 +621,7 @@ export class GameRoundManager {
       value?: string | number;
       amount: number;
       numbers?: number[];
-    }
+    },
   ): Promise<{
     success: boolean;
     error?: string;
@@ -658,7 +659,7 @@ export class GameRoundManager {
         bet = RouletteLogic.createSimpleBet(
           betData.type,
           betData.value ?? "",
-          betData.amount
+          betData.amount,
         );
       }
     } catch (error) {
@@ -697,7 +698,7 @@ export class GameRoundManager {
           },
           timestamp: Date.now(),
         },
-        userId // Exclude the player who placed the bet
+        userId, // Exclude the player who placed the bet
       );
 
       // Send confirmation to player with balance
@@ -714,7 +715,7 @@ export class GameRoundManager {
       });
 
       console.log(
-        `💰 ${player.username} placed bet: ${bet.type} for ${bet.amount} CCC`
+        `💰 ${player.username} placed bet: ${bet.type} for ${bet.amount} CCC`,
       );
 
       return { success: true, bet, newBalance: result.newBalance };
@@ -731,7 +732,7 @@ export class GameRoundManager {
   async handleRemoveBet(
     userId: string,
     roomId: string,
-    betIndex: number
+    betIndex: number,
   ): Promise<{ success: boolean; error?: string; newBalance?: number }> {
     const round = this.rounds.get(roomId);
     if (!round) {
@@ -762,7 +763,7 @@ export class GameRoundManager {
       const result = await updateWalletBalance(
         userId,
         removedBet.amount,
-        "win"
+        "win",
       );
 
       // Remove bet from player
@@ -783,7 +784,7 @@ export class GameRoundManager {
           },
           timestamp: Date.now(),
         },
-        userId
+        userId,
       );
 
       // Send confirmation to player
@@ -813,7 +814,7 @@ export class GameRoundManager {
    */
   async handleClearBets(
     userId: string,
-    roomId: string
+    roomId: string,
   ): Promise<{ success: boolean; error?: string; newBalance?: number }> {
     const round = this.rounds.get(roomId);
     if (!round) {
@@ -855,7 +856,7 @@ export class GameRoundManager {
           },
           timestamp: Date.now(),
         },
-        userId
+        userId,
       );
 
       // Send confirmation to player
@@ -882,7 +883,7 @@ export class GameRoundManager {
    */
   async getRoomState(
     userId: string,
-    roomId: string
+    roomId: string,
   ): Promise<RoomStatePayload | null> {
     const round = this.rounds.get(roomId);
     if (!round) return null;
@@ -920,12 +921,12 @@ export class GameRoundManager {
     sessionId: string,
     gameResult: ReturnType<typeof RouletteLogic.calculateGameResult>,
     bets: Bet[],
-    roomId: string
+    roomId: string,
   ): Promise<void> {
     try {
       const gameBets = bets.map((bet) => {
         const winningBet = gameResult.winningBets.find(
-          (wb) => JSON.stringify(wb.bet) === JSON.stringify(bet)
+          (wb) => JSON.stringify(wb.bet) === JSON.stringify(bet),
         );
 
         return {
@@ -969,7 +970,7 @@ export class GameRoundManager {
         netResult: gameResult.netResult,
         winningNumber: gameResult.spinResult.winningNumber,
       }).catch((err) =>
-        console.error("Failed to publish game.completed:", err)
+        console.error("Failed to publish game.completed:", err),
       );
 
       // Check for big win
@@ -982,7 +983,7 @@ export class GameRoundManager {
       ) {
         const biggestWinningBet = gameResult.winningBets.reduce(
           (max, wb) => (wb.payout > max.payout ? wb : max),
-          gameResult.winningBets[0]
+          gameResult.winningBets[0],
         );
 
         const bigWin = new BigWin({
@@ -1005,7 +1006,7 @@ export class GameRoundManager {
           const message = `🎉 ${username} just won ${
             gameResult.netResult
           } CCC with a x${actualMultiplier.toFixed(
-            2
+            2,
           )} multiplier in Multiplayer Roulette!`;
 
           await fetch(`${chatServiceUrl}/system-message`, {
@@ -1027,7 +1028,7 @@ export class GameRoundManager {
    */
   async handleLockBets(
     userId: string,
-    roomId: string
+    roomId: string,
   ): Promise<{ success: boolean; error?: string }> {
     const round = this.rounds.get(roomId);
     if (!round) {

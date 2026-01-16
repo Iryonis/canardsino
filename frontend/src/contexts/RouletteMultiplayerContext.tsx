@@ -369,7 +369,7 @@ function reducer(state: MultiplayerState, action: Action): MultiplayerState {
       return {
         ...state,
         players: state.players.map((p) =>
-          p.userId === userId ? { ...p, isLocked } : p
+          p.userId === userId ? { ...p, isLocked } : p,
         ),
       };
     }
@@ -536,7 +536,7 @@ export function RouletteMultiplayerProvider({
       ws.clearBets,
       ws.lockBets,
       setPlayerLocked,
-    ]
+    ],
   );
 
   return (
@@ -551,7 +551,7 @@ export function useRouletteMultiplayer() {
   const context = useContext(MultiplayerContext);
   if (!context) {
     throw new Error(
-      "useRouletteMultiplayer must be used within a RouletteMultiplayerProvider"
+      "useRouletteMultiplayer must be used within a RouletteMultiplayerProvider",
     );
   }
   return context;
