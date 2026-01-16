@@ -80,7 +80,7 @@ export default function Home() {
                 </div>
               </div>
               <div className="mt-6 pt-6 border-t border-blue">
-                <p className="text-blue-light text-sm">
+                <p className="text-blue-light text-sm mb-4">
                   Ready to play some games?
                 </p>
                 <Link
@@ -93,7 +93,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="grid md:grid-cols-3 gap-6 mt-12">
+              <div className="grid md:grid-cols-4 gap-6 mt-12">
                 <div className="bg-blue-dark rounded-xl p-6 border border-blue">
                   <div className="text-4xl mb-3">🎲</div>
                   <h3 className="text-xl font-bold text-blue-lightest mb-2">
@@ -101,6 +101,15 @@ export default function Home() {
                   </h3>
                   <p className="text-blue-light">
                     Classic casino game with fair odds
+                  </p>
+                </div>
+                <div className="bg-blue-dark rounded-xl p-6 border border-blue border-yellow-500/50">
+                  <div className="text-4xl mb-3">🦆</div>
+                  <h3 className="text-xl font-bold text-yellow-400 mb-2">
+                    Duck Race
+                  </h3>
+                  <p className="text-blue-light">
+                    Multiplayer racing - winner takes all!
                   </p>
                 </div>
                 <div className="bg-blue-dark rounded-xl p-6 border border-blue">
