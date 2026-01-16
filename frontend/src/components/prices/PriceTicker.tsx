@@ -9,13 +9,14 @@ interface PriceItemProps {
   change24h: number;
 }
 
-function PriceItem({ symbol, name, price, change24h }: PriceItemProps) {
+function PriceItem({ symbol, price, change24h }: PriceItemProps) {
   const isPositive = change24h >= 0;
   const changeColor = isPositive ? "text-green-400" : "text-red-400";
   const changeSign = isPositive ? "+" : "";
 
   const formatPrice = (p: number) => {
-    if (p >= 1000) return `$${p.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+    if (p >= 1000)
+      return `$${p.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
     if (p >= 1) return `$${p.toFixed(2)}`;
     return `$${p.toFixed(4)}`;
   };

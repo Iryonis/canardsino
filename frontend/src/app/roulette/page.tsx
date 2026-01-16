@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import RouletteWheel from "@/components/RouletteWheel";
 import {
   BettingControls,
@@ -31,6 +31,7 @@ import {
   type GameResult as GameResultType,
 } from "@/lib/gameApi";
 import { Navbar } from "@/components/navbar/navbar";
+import Fireworks from "react-canvas-confetti/dist/presets/fireworks";
 
 /**
  * Bet type for roulette bets
@@ -55,23 +56,33 @@ type BetType =
  * @returns Roulette game page
  */
 export default function RoulettePage() {
+  // Display state
+  const [display, setDisplay] = useState<boolean>(false);
   // Wheel state
   const [mustSpin, setMustSpin] = useState(false);
   const [winningNumber, setWinningNumber] = useState<number | null>(null);
 
   // Betting state
   const [bets, setBets] = useState<Bet[]>([]);
-  const [betAmount, setBetAmount] = useState(10);
+  const [prevBets, setPrevBets] = useState<Bet[]>([]);
+  const [betAmount, _setBetAmount] = useState(10);
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
 
   // Game state
   const [balance, setBalance] = useState(0);
-  const [result, setResult] = useState<string>("Place at least one bet");
+  const [result, setResult] = useState<string>(
+    "Place your bets and spin the wheel!"
+  );
   const [history, setHistory] = useState<GameHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingBets, setLoadingBets] = useState(false);
   const [error, setError] = useState<string>("");
   const [betError, setBetError] = useState<string>("");
   const [maxPotentialWin, setMaxPotentialWin] = useState(0);
+
+  // Fireworks controller
+  /* eslint-disable  @typescript-eslint/no-explicit-any */
+  const fireworksController = useRef<any>(null);
 
   // Configuration from backend
   const [config, setConfig] = useState<RouletteConfig | null>(null);
@@ -140,7 +151,7 @@ export default function RoulettePage() {
 
     setLoading(true);
     setError("");
-    setResult("");
+    setResult("Spinning the wheel...");
 
     try {
       // Convert bets to backend format
@@ -187,6 +198,18 @@ export default function RoulettePage() {
     }
   };
 
+  const setSameBets = () => {
+    if (prevBets.reduce((sum, b) => sum + b.amount, 0) <= balance) {
+      setLoadingBets(true);
+      setBets(prevBets);
+      setResult("Setting the same bets...");
+      setTimeout(() => {
+        setLoadingBets(false);
+        setResult("Your bets are set: spin the wheel!");
+      }, 5000);
+    }
+  };
+
   /**
    * Handles the completion of a spin animation and displays results
    * @param gameResult - The result from the game engine
@@ -202,6 +225,18 @@ export default function RoulettePage() {
     await loadBalance();
 
     if (netResult > 0) {
+      if (netResult / bets.reduce((sum, bet) => sum + bet.amount, 0) >= 10) {
+        // Trigger fireworks
+        if (fireworksController.current) {
+          fireworksController.current.run({ speed: 3 });
+          setTimeout(() => {
+            if (fireworksController.current) {
+              fireworksController.current.stop();
+            }
+          }, 5000);
+        }
+      }
+
       setResult(
         `You WON ${netResult} coins! The number was ${spinResult.winningNumber} (${spinResult.color})`
       );
@@ -217,6 +252,7 @@ export default function RoulettePage() {
       );
     }
 
+    setPrevBets(bets);
     setBets([]);
     setSelectedNumbers([]);
   };
@@ -360,6 +396,15 @@ export default function RoulettePage() {
         return;
       }
 
+      if (
+        bet.amount > balance ||
+        bet.amount + bets.reduce((sum, b) => sum + b.amount, 0) > balance
+      ) {
+        setBetError("Insufficient balance for this bet");
+        setTimeout(() => setBetError(""), 3000);
+        return;
+      }
+
       // If validation succeeds, add the bet
       const newBets = [...bets, bet];
       setBets(newBets);
@@ -423,6 +468,16 @@ export default function RoulettePage() {
     setMaxPotentialWin(0);
   };
 
+  const setBetAmount = (amount: number | string) => {
+    if (amount === "All-in") {
+      _setBetAmount(balance);
+    } else {
+      const parsedAmount =
+        typeof amount === "string" ? parseInt(amount) : amount;
+      _setBetAmount(parsedAmount);
+    }
+  };
+
   /**
    * Removes a bet by index
    * @param index - Index of the bet to remove
@@ -442,14 +497,19 @@ export default function RoulettePage() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-blue-darkest">
-      {/* Header */}
-      <Navbar balance={balance} currentPage="European Roulette" />
-
-      <div className="container mx-auto px-4 py-8">
-        {/* Wheel at the top */}
-        <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-8 mb-8">
+  if (display) {
+    /* Wheel at the top */
+    return (
+      <div className="min-h-screen bg-blue-darkest">
+        <Fireworks
+          className="z-50 pointer-events-none fixed top-0 left-0 w-full h-full"
+          onInit={({ conductor }) => {
+            fireworksController.current = conductor;
+          }}
+        />
+        {/* Header */}
+        <Navbar balance={balance} currentPage="European Roulette" />
+        <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-8 my-8">
           <div className="flex justify-center mb-6">
             <RouletteWheel
               winningNumber={winningNumber}
@@ -457,24 +517,53 @@ export default function RoulettePage() {
             />
           </div>
 
-          <button
-            onClick={handleSpinClick}
-            disabled={mustSpin || loading || bets.length === 0}
-            className={`w-full max-w-md mx-auto block py-4 text-lg font-bold rounded-lg transition ${
-              mustSpin || loading || bets.length === 0
-                ? "bg-gray-600 text-gray-300 cursor-not-allowed"
-                : "bg-gradient-to-r from-blue to-blue-light hover:from-blue-light hover:to-blue-lightest text-blue-darkest"
-            }`}
-          >
-            {loading
-              ? "Processing..."
-              : mustSpin
-              ? "Spinning..."
-              : "SPIN the wheel!"}
-          </button>
+          <GameResult result={result} error={error} />
+
+          <div className="flex flex-col md:flex-row items-center justify-center gap-4">
+            <button
+              disabled={mustSpin || loading || bets.length !== 0}
+              className={`trapezoid_left p-3 border border-blue rounded-lg whitespace-nowrap font-semibold text-lg transition-all duration-5000 active:scale-95 ${
+                mustSpin || loading || bets.length === 0
+                  ? "flex-1 bg-green-600 text-white"
+                  : "bg-gray-600 text-gray-300 cursor-not-allowed"
+              }`}
+              onClick={() => {
+                setDisplay(!display);
+              }}
+            >
+              Place a new bet
+            </button>
+            <button
+              onClick={handleSpinClick}
+              disabled={mustSpin || loading || bets.length === 0 || loadingBets}
+              className={`p-4 text-lg font-semibold rounded-lg whitespace-nowrap transition-all duration-5000 shadow-md border ${
+                mustSpin || loading || bets.length === 0
+                  ? "flex-none bg-gray-600 text-gray-300 cursor-not-allowed border-gray-600 shadow-transparent"
+                  : "flex-1 bg-green-600 text-white border-green-300 shadow-green-500"
+              }`}
+            >
+              {mustSpin
+                ? "Spinning..."
+                : bets.length > 0
+                ? "Spin the wheel!"
+                : "Place your bets"}
+            </button>
+            <button
+              disabled={mustSpin || loading || loadingBets}
+              onClick={() => {
+                setSameBets();
+              }}
+              className={`trapezoid_right p-3 border border-blue rounded-lg whitespace-nowrap font-semibold text-lg transition-all duration-5000 ${
+                mustSpin || loading || bets.length === 0
+                  ? "flex-1 bg-green-600 text-white"
+                  : "bg-gray-600 text-gray-300 cursor-not-allowed"
+              }`}
+            >
+              Place the same bet
+            </button>
+          </div>
 
           <div className="absolute top-4 right-4 text-center">
-            <GameResult result={result} error={error} />
             <GameHistory
               history={history.map(
                 (entry) => entry.rouletteDetails.winningNumber
@@ -483,69 +572,100 @@ export default function RoulettePage() {
             />
           </div>
         </div>
+      </div>
+    );
+  } else {
+    return (
+      <div className="min-h-screen bg-blue-darkest">
+        {/* Header */}
+        <Navbar balance={balance} currentPage="European Roulette" />
 
-        {/* Betting panel below */}
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left column - Bet Amount and Current Bets */}
-          <div className="lg:col-span-1">
-            <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-6 sticky top-4">
-              <BettingControls
-                betAmount={betAmount}
-                onBetAmountChange={setBetAmount}
-              />
+        <div className="container mx-auto px-4 py-8">
+          {/* Betting panel below */}
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Left column - Bet Amount and Current Bets */}
+            <div className="lg:col-span-1">
+              <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-6 sticky top-4">
+                <BettingControls
+                  betAmount={betAmount}
+                  onBetAmountChange={setBetAmount}
+                />
 
-              <BetErrorDisplay error={betError} />
+                <BetErrorDisplay error={betError} />
 
-              <CurrentBets
-                bets={bets}
-                multipliers={config.payouts}
-                maxPotentialWin={maxPotentialWin}
-                onRemoveBet={removeBet}
-                onClearAll={clearBets}
-              />
+                <CurrentBets
+                  bets={bets}
+                  multipliers={config.payouts}
+                  maxPotentialWin={maxPotentialWin}
+                  onRemoveBet={removeBet}
+                  onClearAll={clearBets}
+                />
+              </div>
+            </div>
+
+            {/* Middle and right columns - Roulette table */}
+            <div className="lg:col-span-2">
+              <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-6">
+                <BetInfoPanel payouts={config.payouts} />
+
+                <RouletteTable
+                  selectedNumbers={selectedNumbers}
+                  redNumbers={config.redNumbers}
+                  onNumberClick={toggleNumberSelection}
+                  onColumnBet={(column) => addNumberBet("column", column)}
+                  onDozenBet={(dozen) => addNumberBet("dozen", dozen)}
+                  onSimpleBet={addSimpleBet}
+                />
+
+                {/* Action buttons */}
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={addAdvancedBet}
+                    disabled={selectedNumbers.length === 0}
+                    className={`flex-1 py-2 rounded-lg font-semibold text-lg transition ${
+                      selectedNumbers.length === 0
+                        ? "bg-gray-600 cursor-not-allowed text-gray-400"
+                        : "bg-green-600 hover:bg-green-700 text-white"
+                    }`}
+                  >
+                    Place Bet ({betAmount} coins)
+                  </button>
+                  <button
+                    onClick={() => setSelectedNumbers([])}
+                    className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold text-lg transition"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+
+                <SelectedNumbersDisplay selectedNumbers={selectedNumbers} />
+              </div>
             </div>
           </div>
-
-          {/* Middle and right columns - Roulette table */}
-          <div className="lg:col-span-2">
-            <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-6">
-              <BetInfoPanel payouts={config.payouts} />
-
-              <SelectedNumbersDisplay selectedNumbers={selectedNumbers} />
-
-              <RouletteTable
-                selectedNumbers={selectedNumbers}
-                redNumbers={config.redNumbers}
-                onNumberClick={toggleNumberSelection}
-                onColumnBet={(column) => addNumberBet("column", column)}
-                onDozenBet={(dozen) => addNumberBet("dozen", dozen)}
-                onSimpleBet={addSimpleBet}
-              />
-
-              {/* Action buttons */}
-              <div className="flex gap-3 mt-4">
-                <button
-                  onClick={addAdvancedBet}
-                  disabled={selectedNumbers.length === 0}
-                  className={`flex-1 py-2 rounded-lg font-bold text-lg transition ${
-                    selectedNumbers.length === 0
-                      ? "bg-gray-600 cursor-not-allowed text-gray-400"
-                      : "bg-green-600 hover:bg-green-700 text-white"
-                  }`}
-                >
-                  Place Bet ({betAmount} coins)
-                </button>
-                <button
-                  onClick={() => setSelectedNumbers([])}
-                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-lg transition"
-                >
-                  Clear Selection
-                </button>
-              </div>
+          <div className="lg:col-span-2 mt-4">
+            <div
+              className={`flex bg-blue-dark/30 backdrop-blur border border-blue rounded-lg p-2 transition-all duration-300 shadow-lg shadow-black/50 justify-center ${
+                bets.length === 0 ? "" : "group hover:p-0"
+              }`}
+            >
+              <button
+                className={`p-2 rounded-lg transition-all duration-300 ${
+                  bets.length === 0
+                    ? "flex-0 px-6 bg-gray-600 cursor-not-allowed text-gray-400"
+                    : "flex-1 group-hover:p-4 bg-green-600 hover:bg-green-500 active:scale-95"
+                }`}
+                onClick={() => {
+                  setDisplay(!display);
+                }}
+              >
+                <span className="text-white font-semibold group-hover:animate-pulse group-hover:text-2xl group-hover:underline transition-all duration-300">
+                  Play!
+                </span>
+              </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 }
