@@ -310,7 +310,9 @@ function reducer(state: MultiplayerState, action: Action): MultiplayerState {
         ...state,
         phase: action.payload.phase,
         timeRemaining: action.payload.timeRemaining,
-        canBet: action.payload.phase === "waiting" || action.payload.phase === "betting",
+        canBet:
+          action.payload.phase === "waiting" ||
+          action.payload.phase === "betting",
         isSpinning: action.payload.phase === "spinning",
         isWaiting: action.payload.phase === "waiting",
       };
@@ -354,7 +356,12 @@ interface MultiplayerContextType {
   state: MultiplayerState;
   connect: () => void;
   disconnect: () => void;
-  placeBet: (bet: { type: string; value?: string | number; amount: number; numbers?: number[] }) => void;
+  placeBet: (bet: {
+    type: string;
+    value?: string | number;
+    amount: number;
+    numbers?: number[];
+  }) => void;
   removeBet: (betIndex: number) => void;
   clearBets: () => void;
 }
@@ -454,7 +461,11 @@ export function RouletteMultiplayerProvider({
   // Auto-connect on mount if enabled
   useEffect(() => {
     if (autoConnect) {
-      connect();
+      // Add a small delay to ensure token is loaded
+      const timer = setTimeout(() => {
+        connect();
+      }, 100);
+      return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoConnect]);
@@ -491,4 +502,11 @@ export function useRouletteMultiplayer() {
 }
 
 // Export types
-export type { MultiplayerState, Bet, PlayerInfo, SpinResult, PlayerResult, YourResult };
+export type {
+  MultiplayerState,
+  Bet,
+  PlayerInfo,
+  SpinResult,
+  PlayerResult,
+  YourResult,
+};

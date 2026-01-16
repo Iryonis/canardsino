@@ -2,29 +2,36 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 
 export default function GamesCard({
   name,
   img,
   price,
   mode,
-  url,
+  url_single,
+  url_multi,
 }: {
   name: string;
   img: string;
   price: number;
   mode: string;
-  url: string;
+  url_single: string;
+  url_multi: string;
 }) {
+  const [selected, setSelected] = useState(false);
   return (
-    <Link
-      href={url}
+    <button
+      onClick={() => {
+        if (mode === "/") return;
+        else setSelected(!selected);
+      }}
       aria-disabled={mode === "/" ? true : false}
       tabIndex={mode === "/" ? -1 : 0}
       className={`max-w-1/3 max-h-1/10 flex flex-col transition-transform duration-200 ${
         mode === "/"
           ? "cursor-not-allowed pointer-events-none"
-          : "hover:scale-95 active:scale-90"
+          : "cursor-pointer"
       }`}
     >
       <div className="bg-white/5 border-beige rounded border-2 shadow-lg shadow-black/50">
@@ -53,12 +60,12 @@ export default function GamesCard({
         </div>
 
         <div className="p-4 flex flex-row mr-8 justify-between w-full">
-          <div className="text-xl sm:text-2xl font-bold text-white items-center flex text-nowrap">
+          <div className="text-xl mr-4 sm:text-2xl font-bold text-white items-center flex text-nowrap">
             {name}
           </div>
           <div className="justify-center py-4 flex flex-col 2xl:flex-row gap-1 text-center items-stretch">
             <span
-              className="bg-red-100 text-red-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded-lg w-full lg:w-auto flex items-center justify-center"
+              className="bg-red-100 text-red-800 text-xs font-medium me-2 px-2 py-0.5 rounded-lg w-full lg:w-auto flex items-center justify-center"
               title="Language of the project"
             >
               {mode}
@@ -71,7 +78,38 @@ export default function GamesCard({
             </span>
           </div>
         </div>
+        <div className={` ${selected ? "block" : "hidden"}`}>
+          <hr className="border border-blue-lightest w-2/3 text-center mx-auto" />
+          <div className="flex justify-center gap-8 p-4">
+            <Link
+              href={url_single}
+              aria-disabled={url_single === "/" ? true : false}
+              tabIndex={url_single === "/" ? -1 : 0}
+              onClick={(e) => e.stopPropagation()}
+              className={`btn btn-blue hover:scale-105 active:scale-100 ${
+                url_single === "/"
+                  ? "cursor-not-allowed pointer-events-none"
+                  : "cursor-pointer"
+              }`}
+            >
+              Singleplayer
+            </Link>
+            <Link
+              href={url_multi}
+              aria-disabled={url_multi === "/" ? true : false}
+              tabIndex={url_multi === "/" ? -1 : 0}
+              onClick={(e) => e.stopPropagation()}
+              className={`btn btn-blue hover:scale-105 active:scale-100 ${
+                url_multi === "/"
+                  ? "cursor-not-allowed pointer-events-none"
+                  : "cursor-pointer"
+              }`}
+            >
+              Multiplayer
+            </Link>
+          </div>
+        </div>
       </div>
-    </Link>
+    </button>
   );
 }

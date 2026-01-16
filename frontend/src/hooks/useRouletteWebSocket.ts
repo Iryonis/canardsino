@@ -352,8 +352,10 @@ export function useRouletteWebSocket(
 
     ws.onmessage = handleMessage;
 
-    ws.onclose = () => {
-      console.log("WebSocket closed");
+    ws.onclose = (event) => {
+      console.log(
+        `WebSocket closed: code=${event.code}, reason=${event.reason}, wasClean=${event.wasClean}`
+      );
       setIsConnected(false);
       optionsRef.current.onConnectionChange?.(false);
       clearTimers();
@@ -374,8 +376,16 @@ export function useRouletteWebSocket(
       }
     };
 
-    ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
+    ws.onerror = (event) => {
+      console.error("WebSocket error - Event:", event);
+      if (wsRef.current) {
+        console.error(
+          "WebSocket error - State:",
+          wsRef.current.readyState,
+          "URL:",
+          wsRef.current.url
+        );
+      }
     };
   }, [handleMessage, sendMessage, clearTimers]);
 
