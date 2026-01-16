@@ -297,9 +297,9 @@ export const MULTIPLAYER_CONFIG = {
   /** Duration of betting phase in seconds (starts when first bet is placed) */
   BETTING_PHASE_DURATION: 30,
   /** Duration of spinning phase in seconds */
-  SPINNING_PHASE_DURATION: 3,
+  SPINNING_PHASE_DURATION: 5,
   /** Duration of results phase in seconds */
-  RESULTS_PHASE_DURATION: 5,
+  RESULTS_PHASE_DURATION: 20,
   /** Default room ID */
   DEFAULT_ROOM_ID: "main",
   /** Ping interval in milliseconds */

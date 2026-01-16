@@ -129,6 +129,7 @@ export interface SpinStartingPayload {
   phase: "spinning";
   totalBetsAllPlayers: number;
   playersWithBets: number;
+  winningNumber: number;
 }
 
 export interface SpinResultPayload {

@@ -390,6 +390,11 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
   const [betError, setBetError] = useState("");
   const [betLocked, setBetLocked] = useState(false);
+  const [prevPhase, setPrevPhase] = useState(state.phase);
+
+  // Wheel animation state
+  const [mustSpin, setMustSpin] = useState(false);
+  const [winningNumber, setWinningNumber] = useState<number | null>(null);
 
   // Phase display
   const phaseDisplay = getPhaseDisplay(state.phase, state.bettingTriggeredBy);
@@ -536,6 +541,41 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
     }
   }, [state.phase]);
 
+  // Handle wheel animation when spinning starts
+  useEffect(() => {
+    if (state.phase === "spinning" && state.spinResult) {
+      // Set winning number and trigger spin animation
+      setWinningNumber(state.spinResult.winningNumber);
+      setMustSpin(true);
+
+      // Stop spinning after animation completes (5 seconds)
+      const timer = setTimeout(() => {
+        setMustSpin(false);
+      }, 5000);
+
+      return () => clearTimeout(timer);
+    } else if (
+      state.phase === "results" ||
+      state.phase === "waiting" ||
+      state.phase === "betting"
+    ) {
+      // Reset spin state when phase changes away from spinning
+      setMustSpin(false);
+    }
+  }, [state.phase, state.spinResult]);
+
+  // Auto-redirect to betting view when results phase ends
+  useEffect(() => {
+    // Only redirect back if we were in results and just switched away
+    if (prevPhase === "results" && state.phase !== "results" && display) {
+      setDisplay(false);
+      setBetLocked(false);
+      setSelectedNumbers([]);
+      setBetAmount(10);
+    }
+    setPrevPhase(state.phase);
+  }, [state.phase, display, prevPhase]);
+
   if (display) {
     // GAMING VIEW - Shows wheel and results
     return (
@@ -564,45 +604,45 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
             )}
           </div>
 
-          {/* Wheel */}
-          <div className="flex justify-center mb-6">
-            <RouletteWheel
-              winningNumber={state.lastWinningNumber}
-              isSpinning={state.isSpinning}
-            />
-          </div>
-
-          {/* Results */}
-          <ResultsPanel />
-
-          {/* Players list and bets */}
+          {/* Layout: Players left, Wheel center, Results/Bets right */}
           <div className="grid lg:grid-cols-3 gap-6 mt-8">
-            <PlayersList />
-            <div className="lg:col-span-2">
-              <MultiplayerCurrentBets
-                multipliers={config.payouts}
-                betLocked={true}
+            {/* Left: Players list */}
+            <div>
+              <PlayersList />
+            </div>
+
+            {/* Center: Wheel */}
+            <div className="flex flex-col items-center gap-6">
+              <RouletteWheel
+                winningNumber={winningNumber}
+                isSpinning={mustSpin}
               />
             </div>
-          </div>
 
-          {/* Back to betting button */}
-          <div className="flex justify-center mt-8">
-            <button
-              onClick={() => {
-                if (state.phase === "waiting" || state.phase === "betting") {
-                  setDisplay(false);
-                }
-              }}
-              disabled={state.phase !== "waiting" && state.phase !== "betting"}
-              className={`px-8 py-3 rounded-lg font-bold text-lg transition ${
-                state.phase === "waiting" || state.phase === "betting"
-                  ? "bg-blue hover:bg-blue-light text-blue-darkest"
-                  : "bg-gray-600 cursor-not-allowed text-gray-400"
-              }`}
-            >
-              Back to Betting
-            </button>
+            {/* Right: Results (shown in results phase) or current bets */}
+            {state.phase !== "results" && (
+              <div>
+                <MultiplayerCurrentBets
+                  multipliers={config.payouts}
+                  betLocked={true}
+                />
+              </div>
+            )}
+            {state.phase === "results" && (
+              <div>
+                <ResultsPanel />
+                <button
+                  onClick={() => {
+                    setDisplay(false);
+                    setBetLocked(false);
+                    setSelectedNumbers([]);
+                  }}
+                  className="w-full mt-4 px-6 py-3 rounded-lg font-bold text-lg transition bg-blue hover:bg-blue-light text-blue-darkest"
+                >
+                  Back to Betting
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -649,7 +689,7 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
                 betAmount={betAmount}
                 onBetAmountChange={(amount) =>
                   setBetAmount(
-                    typeof amount === "string" ? parseInt(amount) || 0 : amount
+                    typeof amount === "string" ? state.yourBalance || 0 : amount
                   )
                 }
               />

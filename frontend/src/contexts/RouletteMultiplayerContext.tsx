@@ -333,6 +333,16 @@ function reducer(state: MultiplayerState, action: Action): MultiplayerState {
         canBet: false,
         isSpinning: true,
         isWaiting: false,
+        // Set spin result with winning number from SPIN_STARTING payload
+        spinResult:
+          action.payload.winningNumber !== undefined
+            ? {
+                winningNumber: action.payload.winningNumber,
+                color: "red", // Will be properly set in SPIN_RESULT
+                parity: "even",
+                range: "low",
+              }
+            : state.spinResult,
       };
 
     case "SPIN_RESULT": {

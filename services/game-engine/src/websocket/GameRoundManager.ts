@@ -11,16 +11,14 @@
  */
 
 import { v4 as uuidv4 } from "uuid";
-import { WebSocket } from "ws";
+import type { WebSocket } from "ws";
 import { RouletteLogic } from "../game-logic/RouletteLogic";
 import { Bet, EUROPEAN_ROULETTE_CONFIG } from "../models/RouletteTypes";
-import { GameHistory, GameSession, BigWin } from "../models";
+import { GameHistory, BigWin } from "../models";
 import { publishGameCompleted } from "../events/publisher";
 import {
   GameRound,
-  PlayerInfo,
   PlayerResult,
-  RoundPhase,
   MULTIPLAYER_CONFIG,
   ServerMessage,
   RoomStatePayload,
@@ -58,7 +56,7 @@ async function getWalletBalance(userId: string): Promise<number> {
       return 0;
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as { balance: number };
     return data.balance;
   } catch (error) {
     console.error("Error calling wallet service:", error);
@@ -88,11 +86,11 @@ async function updateWalletBalance(
     );
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = (await response.json()) as { error: string };
       throw new Error(error.error || "Failed to update balance");
     }
 
-    return await response.json();
+    return (await response.json()) as { success: boolean; newBalance: number };
   } catch (error) {
     console.error("Error updating wallet balance:", error);
     throw error;
@@ -281,6 +279,14 @@ export class GameRoundManager {
       return;
     }
 
+    // Generate winning number NOW (before animation starts)
+    const winningNumber = Math.floor(Math.random() * 37);
+    const source = "mock-random";
+    const spinResult = RouletteLogic.analyzeWinningNumber(winningNumber);
+    
+    // Store it in the round
+    round.spinResult = spinResult;
+
     // Transition to spinning
     round.phase = "spinning";
     round.timeRemaining = MULTIPLAYER_CONFIG.SPINNING_PHASE_DURATION;
@@ -302,7 +308,7 @@ export class GameRoundManager {
     });
 
     console.log(
-      `🎡 Spinning phase started for room ${roomId} with ${playersWithBets.length} players`
+      `🎡 Spinning phase started for room ${roomId} with ${playersWithBets.length} players - winning number: ${winningNumber}`
     );
   }
 
@@ -313,17 +319,19 @@ export class GameRoundManager {
     const round = this.rounds.get(roomId);
     if (!round) return;
 
-    // Generate winning number
-    // TODO: Use Random.org in production
-    const winningNumber = Math.floor(Math.random() * 37);
+    // Use the winning number already generated in startSpinningPhase
+    if (!round.spinResult) {
+      console.error("No spin result found - this should not happen!");
+      return;
+    }
+
+    const spinResult = round.spinResult;
+    const winningNumber = spinResult.winningNumber;
     const source = "mock-random";
 
-    // Analyze the winning number
-    const spinResult = RouletteLogic.analyzeWinningNumber(winningNumber);
-    round.spinResult = spinResult;
     round.playerResults = new Map();
 
-    console.log(`🎯 Winning number: ${winningNumber} (${spinResult.color})`);
+    console.log(`🎯 Revealing results: ${winningNumber} (${spinResult.color})`);
 
     // Calculate results for each player
     const allPlayerResults: SpinResultPayload["allPlayerResults"] = [];
@@ -888,6 +896,7 @@ export class GameRoundManager {
       bets: p.bets,
       totalBet: p.totalBet,
       isConnected: p.isConnected,
+      isLocked: p.isLocked,
     }));
 
     return {
@@ -898,6 +907,7 @@ export class GameRoundManager {
       players: playersArray,
       yourBets: player?.bets ?? [],
       yourBalance: balance,
+      yourUserId: userId,
     };
   }
 
@@ -958,8 +968,6 @@ export class GameRoundManager {
         totalWin: gameResult.totalWin,
         netResult: gameResult.netResult,
         winningNumber: gameResult.spinResult.winningNumber,
-        winningColor: gameResult.spinResult.color,
-        bets: gameBets,
       }).catch((err) =>
         console.error("Failed to publish game.completed:", err)
       );
@@ -1033,7 +1041,10 @@ export class GameRoundManager {
 
     // Only allow locking if in waiting phase
     if (round.phase !== "waiting") {
-      return { success: false, error: "Can only lock bets in waiting phase" };
+      return {
+        success: false,
+        error: round.phase + "Can only lock bets in waiting phase",
+      };
     }
 
     // Check if player has bets

@@ -44,47 +44,46 @@ export default function RouletteWheel({
 }: RouletteWheelProps) {
   const [rotation, setRotation] = useState(0);
   const [displayNumber, setDisplayNumber] = useState<number | null>(null);
+  const [targetRotation, setTargetRotation] = useState(0);
 
+  // Calculate target rotation when winning number changes
   useLayoutEffect(() => {
-    if (isSpinning && winningNumber !== null) {
-      // Degrees per slot
+    if (winningNumber !== null && winningNumber !== undefined) {
       const degreesPerSlot = 360 / wheelOrder.length;
-
-      // Index of the winning number
       const winningIndex = wheelOrder.indexOf(winningNumber);
-
-      // Absolute angle of the winning slot
+      // The pointer is at top, so we need to rotate to have the winning number at the top
       const targetAngle = 360 - winningIndex * degreesPerSlot;
 
-      // Random full rotations
-      const fullRotations = 5 + Math.floor(Math.random() * 3);
-
-      // Calculate the new rotation value
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setRotation((prev) => {
-        // Normalize current angle
-        const currentAngle = prev % 360;
-
-        // Delta needed to reach target from current position
-        const deltaToTarget = (targetAngle - currentAngle + 360) % 360;
-
-        // Total rotation for this spin
-        return prev + fullRotations * 360 + deltaToTarget;
-      });
-    } else {
-      setDisplayNumber(null);
+      // Calculate full rotation (5 full turns + target angle)
+      const fullRotations = 5 * 360;
+      setTargetRotation(fullRotations + targetAngle);
     }
-  }, [isSpinning, winningNumber]);
+  }, [winningNumber]);
 
+  // Handle spin start - reset and start animation
   useEffect(() => {
-    if (isSpinning && winningNumber !== null) {
+    if (isSpinning && targetRotation > 0) {
+      // Clear display number when starting to spin
+      setDisplayNumber(null);
+
+      // Reset rotation to 0 immediately, then animate to target
+      setRotation(0);
+      // Use setTimeout to ensure state update happens before next render
       const timer = setTimeout(() => {
+        setRotation(targetRotation);
+      }, 0);
+
+      // Display winning number after animation completes (5 seconds)
+      const displayTimer = setTimeout(() => {
         setDisplayNumber(winningNumber);
       }, 5000);
 
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(displayTimer);
+      };
     }
-  }, [isSpinning, winningNumber]);
+  }, [isSpinning, targetRotation, winningNumber]);
 
   const getNumberColor = (num: number) => {
     if (num === 0) return "bg-green-600";
