@@ -3,9 +3,30 @@
 import Link from "next/link";
 import { useAuth } from "../hooks/useAuth";
 import { Navbar } from "../components/navbar/navbar";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { getWalletBalance } from "@/lib/gameApi";
 
 export default function Home() {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
+  const [balance, setBalance] = useState(0);
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!isLoading && (!isAuthenticated || !user)) {
+      console.log("🔒 Not authenticated, redirecting to login...");
+      router.replace("/login");
+    }
+  }, [isAuthenticated, isLoading, user, router]);
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      getWalletBalance()
+        .then((bal) => setBalance(bal.balance))
+        .catch((err) => console.error("Error fetching balance:", err));
+    }
+  }, [isAuthenticated, user]);
 
   if (isLoading) {
     return (
@@ -18,7 +39,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-blue-darkest">
       {/* Header/Navbar */}
-      <Navbar balance={0} currentPage="" />
+      <Navbar balance={balance} currentPage="" />
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-16">
@@ -52,7 +73,9 @@ export default function Home() {
                 <div className="flex justify-between">
                   <span className="text-blue-light">Member Since:</span>
                   <span className="text-blue-lightest font-medium">
-                    {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                    {user.createdAt
+                      ? new Date(user.createdAt).toLocaleDateString()
+                      : "N/A"}
                   </span>
                 </div>
               </div>
@@ -61,10 +84,10 @@ export default function Home() {
                   Ready to play some games?
                 </p>
                 <Link
-                  href="/roulette"
+                  href="/games-page"
                   className="mt-4 block w-full py-3 bg-gradient-to-r from-blue to-blue-light hover:from-blue-light hover:to-blue-lightest text-blue-darkest font-bold rounded-lg transition text-center"
                 >
-                  🎰 Go to Roulette
+                  Check the games
                 </Link>
               </div>
             </div>
