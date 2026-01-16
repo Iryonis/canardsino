@@ -21,6 +21,7 @@ export interface PlayerInfo {
   bets: Bet[];
   totalBet: number;
   isConnected: boolean;
+  isLocked: boolean;
 }
 
 export interface SpinResult {
@@ -59,6 +60,7 @@ export interface RoomStatePayload {
   players: PlayerInfo[];
   yourBets: Bet[];
   yourBalance: number;
+  yourUserId: string;
 }
 
 export interface PlayerJoinedPayload {
@@ -71,6 +73,11 @@ export interface PlayerLeftPayload {
   userId: string;
   username: string;
   playerCount: number;
+}
+
+export interface PlayerLockedPayload {
+  userId: string;
+  username: string;
 }
 
 export interface BetPlacedPayload {
@@ -142,6 +149,7 @@ export type ServerMessage =
   | { type: "ROOM_STATE"; payload: RoomStatePayload; timestamp: number }
   | { type: "PLAYER_JOINED"; payload: PlayerJoinedPayload; timestamp: number }
   | { type: "PLAYER_LEFT"; payload: PlayerLeftPayload; timestamp: number }
+  | { type: "PLAYER_LOCKED"; payload: PlayerLockedPayload; timestamp: number }
   | { type: "BET_PLACED"; payload: BetPlacedPayload; timestamp: number }
   | { type: "BET_REMOVED"; payload: BetRemovedPayload; timestamp: number }
   | { type: "BETS_CLEARED"; payload: BetsClearedPayload; timestamp: number }
@@ -180,12 +188,14 @@ export type ClientMessage =
     }
   | { type: "REMOVE_BET"; payload: { betIndex: number } }
   | { type: "CLEAR_BETS" }
+  | { type: "LOCK_BETS" }
   | { type: "PING" };
 
 export interface UseRouletteWebSocketOptions {
   onRoomState?: (payload: RoomStatePayload) => void;
   onPlayerJoined?: (payload: PlayerJoinedPayload) => void;
   onPlayerLeft?: (payload: PlayerLeftPayload) => void;
+  onPlayerLocked?: (payload: PlayerLockedPayload) => void;
   onBetPlaced?: (payload: BetPlacedPayload) => void;
   onBetRemoved?: (payload: BetRemovedPayload) => void;
   onBetsCleared?: (payload: BetsClearedPayload) => void;
@@ -210,6 +220,7 @@ export interface UseRouletteWebSocketReturn {
   }) => void;
   removeBet: (betIndex: number) => void;
   clearBets: () => void;
+  lockBets: () => void;
   joinRoom: (roomId?: string) => void;
   leaveRoom: () => void;
 }
@@ -275,6 +286,9 @@ export function useRouletteWebSocket(
           break;
         case "PLAYER_LEFT":
           opts.onPlayerLeft?.(message.payload);
+          break;
+        case "PLAYER_LOCKED":
+          opts.onPlayerLocked?.(message.payload);
           break;
         case "BET_PLACED":
           opts.onBetPlaced?.(message.payload);
@@ -433,6 +447,10 @@ export function useRouletteWebSocket(
     sendMessage({ type: "CLEAR_BETS" });
   }, [sendMessage]);
 
+  const lockBets = useCallback(() => {
+    sendMessage({ type: "LOCK_BETS" });
+  }, [sendMessage]);
+
   const joinRoom = useCallback(
     (roomId?: string) => {
       sendMessage({
@@ -461,6 +479,7 @@ export function useRouletteWebSocket(
     placeBet,
     removeBet,
     clearBets,
+    lockBets,
     joinRoom,
     leaveRoom,
   };

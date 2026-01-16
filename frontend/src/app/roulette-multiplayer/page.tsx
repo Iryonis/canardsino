@@ -105,6 +105,7 @@ function PlayersList() {
             </span>
             <span className="text-blue-light">
               {player.totalBet > 0 ? `${player.totalBet} CCC` : "-"}
+              {player.isLocked ? " 🔒" : ""}
             </span>
           </div>
         ))}
@@ -121,8 +122,10 @@ function PlayersList() {
  */
 function MultiplayerCurrentBets({
   multipliers,
+  betLocked = false,
 }: {
   multipliers: Record<string, number>;
+  betLocked?: boolean;
 }) {
   const { state, removeBet, clearBets } = useRouletteMultiplayer();
 
@@ -158,7 +161,7 @@ function MultiplayerCurrentBets({
                   {bet.amount} x {multiplier} = {potentialPayout} CCC
                 </div>
               </div>
-              {state.canBet && (
+              {state.canBet && !betLocked && (
                 <button
                   onClick={() => removeBet(idx)}
                   className="px-2 py-1 bg-red-600/50 hover:bg-red-600 text-white rounded text-xs transition"
@@ -180,7 +183,7 @@ function MultiplayerCurrentBets({
           </div>
         </div>
       </div>
-      {state.canBet && (
+      {state.canBet && !betLocked && (
         <button
           onClick={clearBets}
           className="w-full mt-2 py-2 bg-red-700 hover:bg-red-800 text-white rounded-lg font-bold transition"
@@ -378,12 +381,15 @@ function ConnectionStatus() {
  * Main multiplayer roulette game content
  */
 function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
-  const { state, placeBet } = useRouletteMultiplayer();
+  const { state, placeBet, removeBet, clearBets, lockBets, setPlayerLocked } =
+    useRouletteMultiplayer();
 
   // Local UI state
+  const [display, setDisplay] = useState(false); // false = betting, true = gaming
   const [betAmount, setBetAmount] = useState(10);
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
   const [betError, setBetError] = useState("");
+  const [betLocked, setBetLocked] = useState(false);
 
   // Phase display
   const phaseDisplay = getPhaseDisplay(state.phase, state.bettingTriggeredBy);
@@ -392,7 +398,7 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
    * Toggle number selection
    */
   const toggleNumberSelection = (num: number) => {
-    if (!state.canBet) return;
+    if (!state.canBet || betLocked) return;
 
     if (selectedNumbers.includes(num)) {
       setSelectedNumbers(selectedNumbers.filter((n) => n !== num));
@@ -406,8 +412,8 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
    */
   const addSimpleBet = useCallback(
     (type: "red" | "black" | "even" | "odd" | "low" | "high") => {
-      if (!state.canBet) {
-        setBetError("Cannot place bets now. Wait for next round.");
+      if (!state.canBet || betLocked) {
+        setBetError("Cannot place bets now.");
         setTimeout(() => setBetError(""), 3000);
         return;
       }
@@ -420,7 +426,7 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
 
       placeBet({ type, amount: betAmount });
     },
-    [state.canBet, betAmount, placeBet]
+    [state.canBet, betAmount, placeBet, betLocked]
   );
 
   /**
@@ -428,8 +434,8 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
    */
   const addNumberBet = useCallback(
     (type: "column" | "dozen", value: number) => {
-      if (!state.canBet) {
-        setBetError("Cannot place bets now. Wait for next round.");
+      if (!state.canBet || betLocked) {
+        setBetError("Cannot place bets now.");
         setTimeout(() => setBetError(""), 3000);
         return;
       }
@@ -442,15 +448,15 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
 
       placeBet({ type, value, amount: betAmount });
     },
-    [state.canBet, betAmount, placeBet]
+    [state.canBet, betAmount, placeBet, betLocked]
   );
 
   /**
    * Place advanced bet from selected numbers
    */
   const addAdvancedBet = useCallback(() => {
-    if (!state.canBet) {
-      setBetError("Cannot place bets now. Wait for next round.");
+    if (!state.canBet || betLocked) {
+      setBetError("Cannot place bets now.");
       setTimeout(() => setBetError(""), 3000);
       return;
     }
@@ -497,53 +503,68 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
       amount: betAmount,
     });
     setSelectedNumbers([]);
-  }, [state.canBet, selectedNumbers, betAmount, placeBet]);
+  }, [state.canBet, selectedNumbers, betAmount, placeBet, betLocked]);
+
+  /**
+   * Lock bets and trigger countdown
+   */
+  const handleLockBets = useCallback(() => {
+    if (state.yourBets.length === 0) {
+      setBetError("Place at least one bet before locking");
+      setTimeout(() => setBetError(""), 3000);
+      return;
+    }
+    setBetLocked(true);
+    lockBets(); // Send LOCK_BETS message to server to trigger countdown
+    setPlayerLocked(state.yourUserId, true); // Mark current player as locked
+    setDisplay(true); // Switch to gaming view
+  }, [state.yourBets.length, state.yourUserId, lockBets, setPlayerLocked]);
 
   // Handle error from context
   useEffect(() => {
-    if (state.error) {
-      const timer = setTimeout(() => {
-        setBetError(state.error || "");
-        const clearTimer = setTimeout(() => setBetError(""), 5000);
-        return () => clearTimeout(clearTimer);
-      }, 0);
-      return () => clearTimeout(timer);
+    if (state.error && !betError) {
+      setBetError(state.error);
+      const clearTimer = setTimeout(() => setBetError(""), 5000);
+      return () => clearTimeout(clearTimer);
     }
-  }, [state.error]);
+  }, [state.error, betError]);
 
-  return (
-    <div className="min-h-screen bg-blue-darkest">
-      <ConnectionStatus />
+  // Reset locked state when phase changes away from betting
+  useEffect(() => {
+    if (state.phase !== "waiting" && state.phase !== "betting") {
+      setBetLocked(false);
+    }
+  }, [state.phase]);
 
-      {/* Header */}
-      <Navbar balance={state.yourBalance} currentPage="Multiplayer Roulette" />
+  if (display) {
+    // GAMING VIEW - Shows wheel and results
+    return (
+      <div className="min-h-screen bg-blue-darkest">
+        <ConnectionStatus />
 
-      <div className="container mx-auto px-4 py-8">
-        {/* Timer and Phase Display */}
-        <div className="text-center mb-6">
-          <div className={`text-3xl font-bold ${phaseDisplay.color}`}>
-            {phaseDisplay.text}
-          </div>
-          {state.phase === "waiting" ? (
-            <div className="text-2xl text-blue-light/80 mt-2">
-              {phaseDisplay.subtext}
+        {/* Header */}
+        <Navbar
+          balance={state.yourBalance}
+          currentPage="Multiplayer Roulette"
+        />
+
+        <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-8 my-8">
+          {/* Timer and Phase Display */}
+          <div className="text-center mb-6">
+            <div className={`text-3xl font-bold ${phaseDisplay.color}`}>
+              {phaseDisplay.text}
             </div>
-          ) : (
-            <>
-              <div className="text-5xl font-mono text-blue-lightest mt-2">
-                {formatTime(state.timeRemaining)}
-              </div>
-              {phaseDisplay.subtext && (
-                <p className="text-blue-light/60 text-sm mt-1">
-                  {phaseDisplay.subtext}
-                </p>
-              )}
-            </>
-          )}
-        </div>
+            <div className="text-5xl font-mono text-blue-lightest mt-2">
+              {formatTime(state.timeRemaining)}
+            </div>
+            {phaseDisplay.subtext && (
+              <p className="text-blue-light/60 text-sm mt-1">
+                {phaseDisplay.subtext}
+              </p>
+            )}
+          </div>
 
-        {/* Wheel and Results */}
-        <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-8 mb-8">
+          {/* Wheel */}
           <div className="flex justify-center mb-6">
             <RouletteWheel
               winningNumber={state.lastWinningNumber}
@@ -551,78 +572,177 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
             />
           </div>
 
+          {/* Results */}
           <ResultsPanel />
-        </div>
 
-        {/* Main content grid */}
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left column - Players, Bets, Controls */}
-          <div className="lg:col-span-1 space-y-4">
+          {/* Players list and bets */}
+          <div className="grid lg:grid-cols-3 gap-6 mt-8">
             <PlayersList />
-
-            <BettingControls
-              betAmount={betAmount}
-              onBetAmountChange={(amount) => setBetAmount(typeof amount === 'string' ? parseFloat(amount) || 0 : amount)}
-            />
-
-            <BetErrorDisplay error={betError} />
-
-            <MultiplayerCurrentBets multipliers={config.payouts} />
+            <div className="lg:col-span-2">
+              <MultiplayerCurrentBets
+                multipliers={config.payouts}
+                betLocked={true}
+              />
+            </div>
           </div>
 
-          {/* Middle and right columns - Roulette table */}
-          <div className="lg:col-span-2">
-            <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-6">
-              <BetInfoPanel payouts={config.payouts} />
-
-              <SelectedNumbersDisplay selectedNumbers={selectedNumbers} />
-
-              <RouletteTable
-                selectedNumbers={selectedNumbers}
-                redNumbers={config.redNumbers}
-                onNumberClick={toggleNumberSelection}
-                onColumnBet={(column) => addNumberBet("column", column)}
-                onDozenBet={(dozen) => addNumberBet("dozen", dozen)}
-                onSimpleBet={addSimpleBet}
-              />
-
-              {/* Action buttons */}
-              <div className="flex gap-3 mt-4">
-                <button
-                  onClick={addAdvancedBet}
-                  disabled={selectedNumbers.length === 0 || !state.canBet}
-                  className={`flex-1 py-2 rounded-lg font-bold text-lg transition ${
-                    selectedNumbers.length === 0 || !state.canBet
-                      ? "bg-gray-600 cursor-not-allowed text-gray-400"
-                      : "bg-green-600 hover:bg-green-700 text-white"
-                  }`}
-                >
-                  Place Bet ({betAmount} CCC)
-                </button>
-                <button
-                  onClick={() => setSelectedNumbers([])}
-                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-lg transition"
-                >
-                  Clear Selection
-                </button>
-              </div>
-
-              {!state.canBet && (
-                <p className="text-center text-yellow-400 mt-4">
-                  Betting is closed. Wait for the next round.
-                </p>
-              )}
-              {state.phase === "waiting" && (
-                <p className="text-center text-green-400 mt-4 text-lg font-semibold">
-                  Be the first to bet and start the 30-second countdown!
-                </p>
-              )}
-            </div>
+          {/* Back to betting button */}
+          <div className="flex justify-center mt-8">
+            <button
+              onClick={() => {
+                if (state.phase === "waiting" || state.phase === "betting") {
+                  setDisplay(false);
+                }
+              }}
+              disabled={state.phase !== "waiting" && state.phase !== "betting"}
+              className={`px-8 py-3 rounded-lg font-bold text-lg transition ${
+                state.phase === "waiting" || state.phase === "betting"
+                  ? "bg-blue hover:bg-blue-light text-blue-darkest"
+                  : "bg-gray-600 cursor-not-allowed text-gray-400"
+              }`}
+            >
+              Back to Betting
+            </button>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  } else {
+    // BETTING VIEW - Shows table and betting controls
+    return (
+      <div className="min-h-screen bg-blue-darkest">
+        <ConnectionStatus />
+
+        {/* Header */}
+        <Navbar
+          balance={state.yourBalance}
+          currentPage="Multiplayer Roulette"
+        />
+
+        <div className="container mx-auto px-4 py-8">
+          {/* Timer and Phase Display */}
+          <div className="text-center mb-6">
+            <div className={`text-3xl font-bold ${phaseDisplay.color}`}>
+              {phaseDisplay.text}
+            </div>
+            {state.phase === "waiting" ? (
+              <div className="text-2xl text-blue-light/80 mt-2">
+                {phaseDisplay.subtext}
+              </div>
+            ) : (
+              <div className="text-4xl font-mono text-blue-lightest mt-2">
+                {formatTime(state.timeRemaining)}
+              </div>
+            )}
+          </div>
+
+          {/* Main content grid */}
+          <div className="grid lg:grid-cols-4 gap-6">
+            {/* Players column */}
+            <div
+              className={`space-y-4 ${
+                state.yourBets.length === 0 ? "lg:col-span-2" : "lg:col-span-1"
+              }`}
+            >
+              <PlayersList />
+              <BettingControls
+                betAmount={betAmount}
+                onBetAmountChange={(amount) =>
+                  setBetAmount(
+                    typeof amount === "string" ? parseInt(amount) || 0 : amount
+                  )
+                }
+              />
+              <BetErrorDisplay error={betError} />
+            </div>
+
+            {/* Controls and bets column */}
+            <div
+              className={` ${
+                state.yourBets.length === 0 ? "hidden" : "lg:col-span-1"
+              }`}
+            >
+              <MultiplayerCurrentBets
+                multipliers={config.payouts}
+                betLocked={betLocked}
+              />
+            </div>
+
+            {/* Middle and right columns - Roulette table */}
+            <div className="lg:col-span-2">
+              <div className="bg-blue-dark/30 backdrop-blur border border-blue rounded-xl p-6">
+                <BetInfoPanel payouts={config.payouts} />
+
+                <SelectedNumbersDisplay selectedNumbers={selectedNumbers} />
+
+                <RouletteTable
+                  selectedNumbers={selectedNumbers}
+                  redNumbers={config.redNumbers}
+                  onNumberClick={toggleNumberSelection}
+                  onColumnBet={(column) => addNumberBet("column", column)}
+                  onDozenBet={(dozen) => addNumberBet("dozen", dozen)}
+                  onSimpleBet={addSimpleBet}
+                />
+
+                {/* Action buttons */}
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={addAdvancedBet}
+                    disabled={
+                      selectedNumbers.length === 0 || !state.canBet || betLocked
+                    }
+                    className={`flex-1 py-2 rounded-lg font-bold text-lg transition ${
+                      selectedNumbers.length === 0 || !state.canBet || betLocked
+                        ? "bg-gray-600 cursor-not-allowed text-gray-400"
+                        : "bg-green-600 hover:bg-green-700 text-white"
+                    }`}
+                  >
+                    Place Bet ({betAmount} CCC)
+                  </button>
+                  <button
+                    onClick={() => setSelectedNumbers([])}
+                    disabled={betLocked}
+                    className={`px-6 py-2 rounded-lg font-bold text-lg transition ${
+                      betLocked
+                        ? "bg-gray-600 cursor-not-allowed text-gray-400"
+                        : "bg-red-600 hover:bg-red-700 text-white"
+                    }`}
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Lock bets button */}
+            {state.canBet && (
+              <div className="col-span-full">
+                <div
+                  className={`flex bg-blue-dark/30 backdrop-blur border border-blue rounded-lg p-2 transition-all duration-300 shadow-lg shadow-black/50 justify-center ${
+                    state.yourBets.length === 0 ? "" : "group hover:p-0"
+                  }`}
+                >
+                  <button
+                    className={`p-2 rounded-lg transition-all duration-300 ${
+                      state.yourBets.length === 0
+                        ? "flex-0 px-6 bg-gray-600 cursor-not-allowed text-gray-400"
+                        : "flex-1 group-hover:p-4 bg-green-600 hover:bg-green-500 active:scale-95"
+                    }`}
+                    onClick={handleLockBets}
+                    disabled={state.yourBets.length === 0 || betLocked}
+                  >
+                    <span className="text-white whitespace-nowrap font-semibold group-hover:animate-pulse group-hover:text-2xl group-hover:underline transition-all duration-300">
+                      Lock bets
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 }
 
 /**

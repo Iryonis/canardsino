@@ -29,7 +29,8 @@ import {
 } from "./types";
 
 // Wallet service configuration
-const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || "http://wallet:8002";
+const WALLET_SERVICE_URL =
+  process.env.WALLET_SERVICE_URL || "http://wallet:8002";
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || "internal_service_key";
 
 /**
@@ -103,7 +104,8 @@ export class GameRoundManager {
   private rounds: Map<string, GameRound> = new Map();
 
   /** Connected WebSocket clients by user ID */
-  private connections: Map<string, WebSocket & AuthenticatedWebSocket> = new Map();
+  private connections: Map<string, WebSocket & AuthenticatedWebSocket> =
+    new Map();
 
   /** Timer intervals for each room */
   private timers: Map<string, NodeJS.Timeout> = new Map();
@@ -119,7 +121,11 @@ export class GameRoundManager {
   private sendToUser: (userId: string, message: ServerMessage) => void;
 
   constructor(
-    broadcastToRoom: (roomId: string, message: ServerMessage, excludeUserId?: string) => void,
+    broadcastToRoom: (
+      roomId: string,
+      message: ServerMessage,
+      excludeUserId?: string
+    ) => void,
     sendToUser: (userId: string, message: ServerMessage) => void
   ) {
     this.broadcastToRoom = broadcastToRoom;
@@ -151,7 +157,10 @@ export class GameRoundManager {
   /**
    * Start the countdown timer when first bet is placed
    */
-  private startBettingCountdown(roomId: string, triggeredBy: { userId: string; username: string }): void {
+  private startBettingCountdown(
+    roomId: string,
+    triggeredBy: { userId: string; username: string }
+  ): void {
     const round = this.rounds.get(roomId);
     if (!round) return;
 
@@ -163,7 +172,9 @@ export class GameRoundManager {
     round.timeRemaining = MULTIPLAYER_CONFIG.BETTING_PHASE_DURATION;
     round.bettingStartedAt = Date.now();
 
-    console.log(`⏱️ Betting countdown started by ${triggeredBy.username} in room ${roomId}`);
+    console.log(
+      `⏱️ Betting countdown started by ${triggeredBy.username} in room ${roomId}`
+    );
 
     // Broadcast that betting phase has started
     this.broadcastToRoom(roomId, {
@@ -352,13 +363,20 @@ export class GameRoundManager {
       let newBalance = 0;
       if (gameResult.totalWin > 0) {
         try {
-          const result = await updateWalletBalance(userId, gameResult.totalWin, "win");
+          const result = await updateWalletBalance(
+            userId,
+            gameResult.totalWin,
+            "win"
+          );
           newBalance = result.newBalance;
           console.log(
             `✅ Credited ${gameResult.totalWin} CCC to ${player.username}`
           );
         } catch (error) {
-          console.error(`❌ Failed to credit winnings to ${player.username}:`, error);
+          console.error(
+            `❌ Failed to credit winnings to ${player.username}:`,
+            error
+          );
         }
       } else {
         newBalance = await getWalletBalance(userId);
@@ -446,10 +464,11 @@ export class GameRoundManager {
     round.spinResult = undefined;
     round.playerResults = undefined;
 
-    // Clear all player bets
+    // Clear all player bets and reset lock status
     for (const player of round.players.values()) {
       player.bets = [];
       player.totalBet = 0;
+      player.isLocked = false;
     }
 
     // Broadcast waiting phase
@@ -492,6 +511,7 @@ export class GameRoundManager {
         bets: [],
         totalBet: 0,
         isConnected: true,
+        isLocked: false,
       };
       round.players.set(userId, player);
       console.log(`👋 Player ${username} joined room ${roomId}`);
@@ -522,6 +542,7 @@ export class GameRoundManager {
       bets: p.bets,
       totalBet: p.totalBet,
       isConnected: p.isConnected,
+      isLocked: p.isLocked,
     }));
 
     return {
@@ -532,6 +553,7 @@ export class GameRoundManager {
       players: playersArray,
       yourBets: player.bets,
       yourBalance: balance,
+      yourUserId: userId,
     };
   }
 
@@ -546,7 +568,11 @@ export class GameRoundManager {
     if (!player) return;
 
     // Mark as disconnected but keep in round if they have bets during active game
-    if (player.bets.length > 0 && round.phase !== "waiting" && round.phase !== "results") {
+    if (
+      player.bets.length > 0 &&
+      round.phase !== "waiting" &&
+      round.phase !== "results"
+    ) {
       player.isConnected = false;
       console.log(
         `⚠️ Player ${player.username} disconnected but has active bets`
@@ -581,8 +607,18 @@ export class GameRoundManager {
   async handlePlaceBet(
     userId: string,
     roomId: string,
-    betData: { type: string; value?: string | number; amount: number; numbers?: number[] }
-  ): Promise<{ success: boolean; error?: string; bet?: Bet; newBalance?: number }> {
+    betData: {
+      type: string;
+      value?: string | number;
+      amount: number;
+      numbers?: number[];
+    }
+  ): Promise<{
+    success: boolean;
+    error?: string;
+    bet?: Bet;
+    newBalance?: number;
+  }> {
     const round = this.rounds.get(roomId);
     if (!round) {
       return { success: false, error: "Room not found" };
@@ -638,11 +674,7 @@ export class GameRoundManager {
       player.bets.push(bet);
       player.totalBet += bet.amount;
 
-      // If this is the first bet and we're in waiting phase, start the countdown!
-      const isFirstBet = round.phase === "waiting";
-      if (isFirstBet) {
-        this.startBettingCountdown(roomId, { userId, username: player.username });
-      }
+      // Don't start countdown here anymore - wait for LOCK_BETS message
 
       // Broadcast to room
       this.broadcastToRoom(
@@ -719,7 +751,11 @@ export class GameRoundManager {
 
     // Refund to wallet
     try {
-      const result = await updateWalletBalance(userId, removedBet.amount, "win");
+      const result = await updateWalletBalance(
+        userId,
+        removedBet.amount,
+        "win"
+      );
 
       // Remove bet from player
       player.bets.splice(betIndex, 1);
@@ -924,13 +960,18 @@ export class GameRoundManager {
         winningNumber: gameResult.spinResult.winningNumber,
         winningColor: gameResult.spinResult.color,
         bets: gameBets,
-      }).catch((err) => console.error("Failed to publish game.completed:", err));
+      }).catch((err) =>
+        console.error("Failed to publish game.completed:", err)
+      );
 
       // Check for big win
       const actualMultiplier =
         gameResult.totalBet > 0 ? gameResult.totalWin / gameResult.totalBet : 0;
 
-      if (actualMultiplier >= BIG_WIN_MULTIPLIER && gameResult.winningBets.length > 0) {
+      if (
+        actualMultiplier >= BIG_WIN_MULTIPLIER &&
+        gameResult.winningBets.length > 0
+      ) {
         const biggestWinningBet = gameResult.winningBets.reduce(
           (max, wb) => (wb.payout > max.payout ? wb : max),
           gameResult.winningBets[0]
@@ -951,8 +992,13 @@ export class GameRoundManager {
 
         // Notify chat service
         try {
-          const chatServiceUrl = process.env.CHAT_SERVICE_URL || "http://chat:8004";
-          const message = `🎉 ${username} just won ${gameResult.netResult} CCC with a x${actualMultiplier.toFixed(2)} multiplier in Multiplayer Roulette!`;
+          const chatServiceUrl =
+            process.env.CHAT_SERVICE_URL || "http://chat:8004";
+          const message = `🎉 ${username} just won ${
+            gameResult.netResult
+          } CCC with a x${actualMultiplier.toFixed(
+            2
+          )} multiplier in Multiplayer Roulette!`;
 
           await fetch(`${chatServiceUrl}/system-message`, {
             method: "POST",
@@ -966,6 +1012,50 @@ export class GameRoundManager {
     } catch (error) {
       console.error("Error saving game to database:", error);
     }
+  }
+
+  /**
+   * Handle lock bets request - starts the countdown
+   */
+  async handleLockBets(
+    userId: string,
+    roomId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const round = this.rounds.get(roomId);
+    if (!round) {
+      return { success: false, error: "Room not found" };
+    }
+
+    const player = round.players.get(userId);
+    if (!player) {
+      return { success: false, error: "Player not in room" };
+    }
+
+    // Only allow locking if in waiting phase
+    if (round.phase !== "waiting") {
+      return { success: false, error: "Can only lock bets in waiting phase" };
+    }
+
+    // Check if player has bets
+    if (player.bets.length === 0) {
+      return { success: false, error: "No bets to lock" };
+    }
+
+    // Start the countdown
+    player.isLocked = true;
+    this.startBettingCountdown(roomId, { userId, username: player.username });
+
+    // Broadcast that player locked their bets
+    this.broadcastToRoom(roomId, {
+      type: "PLAYER_LOCKED",
+      payload: {
+        userId,
+        username: player.username,
+      },
+      timestamp: Date.now(),
+    });
+
+    return { success: true };
   }
 
   /**
