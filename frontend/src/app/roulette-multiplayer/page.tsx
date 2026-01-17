@@ -400,8 +400,7 @@ function ConnectionStatus() {
  * Main multiplayer roulette game content
  */
 function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
-  const { state, placeBet, removeBet, clearBets, lockBets, setPlayerLocked } =
-    useRouletteMultiplayer();
+  const { state, placeBet, lockBets } = useRouletteMultiplayer();
 
   // Local UI state
   const [display, setDisplay] = useState(false); // false = betting, true = gaming
@@ -548,16 +547,22 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
   // Handle error from context
   useEffect(() => {
     if (state.error && !betError) {
-      setBetError(state.error);
+      const timer = setTimeout(() => {
+        setBetError(state.error);
+      }, 0);
       const clearTimer = setTimeout(() => setBetError(""), 5000);
-      return () => clearTimeout(clearTimer);
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(clearTimer);
+      };
     }
   }, [state.error, betError]);
 
   // Reset locked state when phase changes away from betting
   useEffect(() => {
     if (state.phase !== "waiting" && state.phase !== "betting") {
-      setBetLocked(false);
+      const timer = setTimeout(() => setBetLocked(false), 0);
+      return () => clearTimeout(timer);
     }
   }, [state.phase]);
 
@@ -565,37 +570,40 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
   useEffect(() => {
     console.log(state.phase, state.spinResult);
     if (state.phase === "spinning" && state.spinResult) {
-      // Set winning number and trigger spin animation
-      setWinningNumber(state.spinResult.winningNumber);
-      setMustSpin(true);
-      console.log(mustSpin, winningNumber);
-
-      // Stop spinning after animation completes (5 seconds)
       const timer = setTimeout(() => {
+        setWinningNumber(state.spinResult!.winningNumber);
+        setMustSpin(true);
+      }, 0);
+      const stopTimer = setTimeout(() => {
         setMustSpin(false);
       }, 5000);
-
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(stopTimer);
+      };
     } else if (
       state.phase === "results" ||
       state.phase === "waiting" ||
       state.phase === "betting"
     ) {
-      // Reset spin state when phase changes away from spinning
-      setMustSpin(false);
+      const resetTimer = setTimeout(() => setMustSpin(false), 0);
+      return () => clearTimeout(resetTimer);
     }
   }, [state.phase, state.spinResult]);
 
   // Auto-redirect to betting view when results phase ends
   useEffect(() => {
-    // Only redirect back if we were in results and just switched away
     if (prevPhase === "results" && state.phase !== "results" && display) {
-      setDisplay(false);
-      setBetLocked(false);
-      setSelectedNumbers([]);
-      setBetAmount(10);
+      const timer = setTimeout(() => {
+        setDisplay(false);
+        setBetLocked(false);
+        setSelectedNumbers([]);
+        setBetAmount(10);
+      }, 0);
+      return () => clearTimeout(timer);
     }
-    setPrevPhase(state.phase);
+    const prevTimer = setTimeout(() => setPrevPhase(state.phase), 0);
+    return () => clearTimeout(prevTimer);
   }, [state.phase, display, prevPhase]);
 
   if (display) {

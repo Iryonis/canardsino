@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useEffect, useState, useLayoutEffect } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * Order of numbers on European roulette wheel (clockwise)
@@ -47,40 +47,39 @@ export default function RouletteWheel({
   const [targetRotation, setTargetRotation] = useState(0);
 
   // Calculate target rotation when winning number changes
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (winningNumber !== null && winningNumber !== undefined) {
       const degreesPerSlot = 360 / wheelOrder.length;
       const winningIndex = wheelOrder.indexOf(winningNumber);
-      // The pointer is at top, so we need to rotate to have the winning number at the top
       const targetAngle = 360 - winningIndex * degreesPerSlot;
-
-      // Calculate full rotation (5 full turns + target angle)
       const fullRotations = 5 * 360;
-      setTargetRotation(fullRotations + targetAngle);
+      const timer = setTimeout(
+        () => setTargetRotation(fullRotations + targetAngle),
+        0,
+      );
+      return () => clearTimeout(timer);
     }
   }, [winningNumber]);
 
   // Handle spin start - reset and start animation
   useEffect(() => {
     if (isSpinning && targetRotation > 0) {
-      // Clear display number when starting to spin
-      setDisplayNumber(null);
-
-      // Reset rotation to 0 immediately, then animate to target
-      setRotation(0);
-      // Use setTimeout to ensure state update happens before next render
-      const timer = setTimeout(() => {
-        setRotation(targetRotation);
-      }, 0);
-
-      // Display winning number after animation completes (5 seconds)
-      const displayTimer = setTimeout(() => {
-        setDisplayNumber(winningNumber);
-      }, 5000);
-
+      let timer: NodeJS.Timeout | undefined;
+      let displayTimer: NodeJS.Timeout | undefined;
+      const raf = requestAnimationFrame(() => {
+        setDisplayNumber(null);
+        setRotation(0);
+        timer = setTimeout(() => {
+          setRotation(targetRotation);
+        }, 0);
+        displayTimer = setTimeout(() => {
+          setDisplayNumber(winningNumber ?? null);
+        }, 5000);
+      });
       return () => {
-        clearTimeout(timer);
-        clearTimeout(displayTimer);
+        cancelAnimationFrame(raf);
+        if (timer) clearTimeout(timer);
+        if (displayTimer) clearTimeout(displayTimer);
       };
     }
   }, [isSpinning, targetRotation, winningNumber]);
@@ -137,8 +136,8 @@ export default function RouletteWheel({
                     isGreen
                       ? "bg-green-600"
                       : isRed
-                      ? "bg-red-600"
-                      : "bg-gray-900"
+                        ? "bg-red-600"
+                        : "bg-gray-900"
                   }`}
                   style={{
                     clipPath: "polygon(30% 0%, 70% 0%, 60% 100%, 40% 100%)",
@@ -163,7 +162,7 @@ export default function RouletteWheel({
           {/* Centre de la roulette */}
           <div
             className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full shadow-xl flex items-center justify-center border-4 border-yellow-200 ${getNumberColor(
-              displayNumber !== null ? displayNumber : -1
+              displayNumber !== null ? displayNumber : -1,
             )}`}
             style={{
               transform: ` rotate(${-rotation}deg)`,

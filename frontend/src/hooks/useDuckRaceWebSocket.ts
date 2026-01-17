@@ -285,7 +285,10 @@ export function useDuckRaceWebSocket(
 
   // Store callbacks in refs to avoid stale closures
   const optionsRef = useRef(options);
-  optionsRef.current = options;
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   const clearTimers = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -368,93 +371,90 @@ export function useDuckRaceWebSocket(
   }, []);
 
   const connect = useCallback(() => {
-    // Don't connect if already connected or connecting
-    if (
-      wsRef.current?.readyState === WebSocket.OPEN ||
-      wsRef.current?.readyState === WebSocket.CONNECTING
-    ) {
-      return;
-    }
-
-    // Get token
-    const token = tokenManager.getAccessToken();
-    if (!token) {
-      // Retry getting token after a delay if not available
-      if (tokenRetryCountRef.current < TOKEN_MAX_RETRIES) {
-        tokenRetryCountRef.current++;
-        console.warn(
-          `No access token yet for Duck Race WebSocket, retrying... (${tokenRetryCountRef.current}/${TOKEN_MAX_RETRIES})`,
-        );
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connect();
-        }, TOKEN_RETRY_DELAY);
+    const attemptConnect = () => {
+      // Don't connect if already connected or connecting
+      if (
+        wsRef.current?.readyState === WebSocket.OPEN ||
+        wsRef.current?.readyState === WebSocket.CONNECTING
+      ) {
         return;
       }
-      console.error(
-        "No access token available for Duck Race WebSocket connection after retries",
-      );
-      optionsRef.current.onError?.({
-        code: "AUTH_ERROR",
-        message: "No access token available",
-      });
-      return;
-    }
 
-    // Reset retry counter on successful token retrieval
-    tokenRetryCountRef.current = 0;
-
-    manualDisconnectRef.current = false;
-
-    const wsUrl = `${WS_URL}?token=${encodeURIComponent(token)}`;
-    console.log("Duck Race connecting to:", wsUrl);
-
-    try {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-      console.log("Duck Race WebSocket created, readyState:", ws.readyState);
-
-      ws.onopen = () => {
-        console.log("Duck Race WebSocket connected");
-        setIsConnected(true);
-        optionsRef.current.onConnectionChange?.(true);
-        reconnectDelayRef.current = RECONNECT_DELAY;
-
-        // Start ping interval
-        pingIntervalRef.current = setInterval(() => {
-          sendMessage({ type: "PING" });
-        }, PING_INTERVAL);
-      };
-
-      ws.onmessage = handleMessage;
-
-      ws.onclose = (event) => {
-        console.log("Duck Race WebSocket closed:", event.code, event.reason);
-        setIsConnected(false);
-        optionsRef.current.onConnectionChange?.(false);
-        clearTimers();
-
-        // Reconnect unless manually disconnected
-        if (!manualDisconnectRef.current) {
+      const token = tokenManager.getAccessToken();
+      if (!token) {
+        if (tokenRetryCountRef.current < TOKEN_MAX_RETRIES) {
+          tokenRetryCountRef.current++;
+          console.warn(
+            `No access token yet for Duck Race WebSocket, retrying... (${tokenRetryCountRef.current}/${TOKEN_MAX_RETRIES})`,
+          );
           reconnectTimeoutRef.current = setTimeout(() => {
-            console.log(
-              `Reconnecting Duck Race in ${reconnectDelayRef.current}ms...`,
-            );
-            connect();
-            // Exponential backoff
-            reconnectDelayRef.current = Math.min(
-              reconnectDelayRef.current * 2,
-              MAX_RECONNECT_DELAY,
-            );
-          }, reconnectDelayRef.current);
+            attemptConnect();
+          }, TOKEN_RETRY_DELAY);
+          return;
         }
-      };
+        console.error(
+          "No access token available for Duck Race WebSocket connection after retries",
+        );
+        optionsRef.current.onError?.({
+          code: "AUTH_ERROR",
+          message: "No access token available",
+        });
+        return;
+      }
 
-      ws.onerror = (error) => {
-        console.error("Duck Race WebSocket error:", error);
-      };
-    } catch (err) {
-      console.error("Duck Race WebSocket creation error:", err);
-    }
+      tokenRetryCountRef.current = 0;
+      manualDisconnectRef.current = false;
+
+      const wsUrl = `${WS_URL}?token=${encodeURIComponent(token)}`;
+      console.log("Duck Race connecting to:", wsUrl);
+
+      try {
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+        console.log("Duck Race WebSocket created, readyState:", ws.readyState);
+
+        ws.onopen = () => {
+          console.log("Duck Race WebSocket connected");
+          setIsConnected(true);
+          optionsRef.current.onConnectionChange?.(true);
+          reconnectDelayRef.current = RECONNECT_DELAY;
+
+          pingIntervalRef.current = setInterval(() => {
+            sendMessage({ type: "PING" });
+          }, PING_INTERVAL);
+        };
+
+        ws.onmessage = handleMessage;
+
+        ws.onclose = (event) => {
+          console.log("Duck Race WebSocket closed:", event.code, event.reason);
+          setIsConnected(false);
+          optionsRef.current.onConnectionChange?.(false);
+          clearTimers();
+
+          if (!manualDisconnectRef.current) {
+            reconnectTimeoutRef.current = setTimeout(() => {
+              console.log(
+                `Reconnecting Duck Race in ${reconnectDelayRef.current}ms...`,
+              );
+              attemptConnect();
+              reconnectDelayRef.current = Math.min(
+                reconnectDelayRef.current * 2,
+                MAX_RECONNECT_DELAY,
+              );
+            }, reconnectDelayRef.current);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error("Duck Race WebSocket error:", error);
+        };
+      } catch (err) {
+        console.error("Duck Race WebSocket creation error:", err);
+      }
+    };
+
+    attemptConnect();
   }, [handleMessage, sendMessage, clearTimers]);
 
   const disconnect = useCallback(() => {
