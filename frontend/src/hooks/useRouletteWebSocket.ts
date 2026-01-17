@@ -36,6 +36,7 @@ export interface SpinResult {
 export interface PlayerResult {
   userId: string;
   username: string;
+  bets: Bet[];
   totalBet: number;
   totalWin: number;
   netResult: number;
@@ -238,7 +239,7 @@ const MAX_RECONNECT_DELAY = 30000;
 const PING_INTERVAL = 30000;
 
 export function useRouletteWebSocket(
-  options: UseRouletteWebSocketOptions = {}
+  options: UseRouletteWebSocketOptions = {},
 ): UseRouletteWebSocketReturn {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -369,7 +370,7 @@ export function useRouletteWebSocket(
 
     ws.onclose = (event) => {
       console.log(
-        `WebSocket closed: code=${event.code}, reason=${event.reason}, wasClean=${event.wasClean}`
+        `WebSocket closed: code=${event.code}, reason=${event.reason}, wasClean=${event.wasClean}`,
       );
       setIsConnected(false);
       optionsRef.current.onConnectionChange?.(false);
@@ -385,7 +386,7 @@ export function useRouletteWebSocket(
           // Exponential backoff
           reconnectDelayRef.current = Math.min(
             reconnectDelayRef.current * 2,
-            MAX_RECONNECT_DELAY
+            MAX_RECONNECT_DELAY,
           );
         }, reconnectDelayRef.current);
       }
@@ -398,7 +399,7 @@ export function useRouletteWebSocket(
           "WebSocket error - State:",
           wsRef.current.readyState,
           "URL:",
-          wsRef.current.url
+          wsRef.current.url,
         );
       }
     };
@@ -431,7 +432,7 @@ export function useRouletteWebSocket(
         payload: bet,
       });
     },
-    [sendMessage]
+    [sendMessage],
   );
 
   const removeBet = useCallback(
@@ -441,7 +442,7 @@ export function useRouletteWebSocket(
         payload: { betIndex },
       });
     },
-    [sendMessage]
+    [sendMessage],
   );
 
   const clearBets = useCallback(() => {
@@ -459,7 +460,7 @@ export function useRouletteWebSocket(
         payload: roomId ? { roomId } : undefined,
       });
     },
-    [sendMessage]
+    [sendMessage],
   );
 
   const leaveRoom = useCallback(() => {

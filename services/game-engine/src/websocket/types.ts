@@ -227,6 +227,7 @@ export interface SpinResultPayload {
   allPlayerResults: Array<{
     userId: string;
     username: string;
+    bets: Bet[];
     totalBet: number;
     totalWin: number;
     netResult: number;
@@ -297,7 +298,7 @@ export interface AuthenticatedWebSocket {
 
 export const MULTIPLAYER_CONFIG = {
   /** Duration of betting phase in seconds (starts when first bet is placed) */
-  BETTING_PHASE_DURATION: 5,
+  BETTING_PHASE_DURATION: 30,
   /** Duration of spinning phase in seconds */
   SPINNING_PHASE_DURATION: 5,
   /** Duration of results phase in seconds */

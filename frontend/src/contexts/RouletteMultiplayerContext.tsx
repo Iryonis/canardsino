@@ -309,8 +309,13 @@ function reducer(state: MultiplayerState, action: Action): MultiplayerState {
         spinResult: null,
         allPlayerResults: [],
         yourResult: null,
-        // Clear player bets
-        players: state.players.map((p) => ({ ...p, bets: [], totalBet: 0 })),
+        // Clear player bets and locked state
+        players: state.players.map((p) => ({
+          ...p,
+          bets: [],
+          totalBet: 0,
+          isLocked: false,
+        })),
       };
     }
 

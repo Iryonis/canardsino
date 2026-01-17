@@ -298,27 +298,46 @@ function ResultsPanel() {
           <h4 className="text-blue-light text-sm font-semibold mb-2">
             All Players:
           </h4>
-          <div className="space-y-1 max-h-32 overflow-y-auto">
+          <div className="space-y-2 max-h-64 overflow-y-auto">
             {allPlayerResults.map((result) => (
               <div
                 key={result.userId}
-                className="flex justify-between text-sm bg-blue-dark/50 p-2 rounded"
+                className="bg-blue-dark/50 p-3 rounded border border-blue-light/30"
               >
-                <span className="text-blue-lightest truncate">
-                  {result.username}
-                </span>
-                <span
-                  className={
-                    result.netResult > 0
-                      ? "text-green-400"
-                      : result.netResult < 0
-                        ? "text-red-400"
-                        : "text-blue-light"
-                  }
-                >
-                  {result.netResult > 0 ? "+" : ""}
-                  {result.netResult} CCC
-                </span>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-blue-lightest font-semibold truncate">
+                    {result.username}
+                  </span>
+                  <span
+                    className={`font-bold ${
+                      result.netResult > 0
+                        ? "text-green-400"
+                        : result.netResult < 0
+                          ? "text-red-400"
+                          : "text-blue-light"
+                    }`}
+                  >
+                    {result.netResult > 0 ? "+" : ""}
+                    {result.netResult} CCC
+                  </span>
+                </div>
+                {result.bets && result.bets.length > 0 && (
+                  <div className="text-xs text-blue-light/80 space-y-1">
+                    <div className="text-blue-light/60 font-semibold">
+                      Bets:
+                    </div>
+                    {result.bets.map((bet, idx) => (
+                      <div key={idx} className="flex justify-between pl-2">
+                        <span>{getBetLabel(bet)}</span>
+                        <span>{bet.amount} CCC</span>
+                      </div>
+                    ))}
+                    <div className="border-t border-blue-light/20 pt-1 mt-1 flex justify-between font-semibold">
+                      <span>Total:</span>
+                      <span>{result.totalBet} CCC</span>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -521,9 +540,10 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
     }
     setBetLocked(true);
     lockBets(); // Send LOCK_BETS message to server to trigger countdown
-    setPlayerLocked(state.yourUserId, true); // Mark current player as locked
+    // Don't call setPlayerLocked here - wait for the server to broadcast PLAYER_LOCKED
+    // This ensures all clients see the same state and avoids race conditions
     setDisplay(true); // Switch to gaming view
-  }, [state.yourBets.length, state.yourUserId, lockBets, setPlayerLocked]);
+  }, [state.yourBets.length, lockBets]);
 
   // Handle error from context
   useEffect(() => {

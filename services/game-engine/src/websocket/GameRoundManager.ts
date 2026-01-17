@@ -334,9 +334,14 @@ export class GameRoundManager {
 
     console.log(`🎯 Revealing results: ${winningNumber} (${spinResult.color})`);
 
-    // Calculate results for each player
+    // First pass: Calculate results for ALL players with bets
+    // This builds the complete allPlayerResults array that ALL players will see
     const allPlayerResults: SpinResultPayload["allPlayerResults"] = [];
     const sessionId = uuidv4();
+    const playerGameResults = new Map<
+      string,
+      { gameResult: any; newBalance: number }
+    >();
 
     for (const [userId, player] of round.players) {
       if (player.bets.length === 0) continue;
@@ -359,9 +364,11 @@ export class GameRoundManager {
 
       round.playerResults.set(userId, playerResult);
 
+      // Add to complete results list with bets for display
       allPlayerResults.push({
         userId,
         username: player.username,
+        bets: player.bets,
         totalBet: gameResult.totalBet,
         totalWin: gameResult.totalWin,
         netResult: gameResult.netResult,
@@ -391,14 +398,23 @@ export class GameRoundManager {
         newBalance = await getWalletBalance(userId);
       }
 
-      // Send personal result to this player
+      // Store results for second pass
+      playerGameResults.set(userId, { gameResult, newBalance });
+    }
+
+    // Second pass: Send results to all players with the COMPLETE allPlayerResults
+    for (const [userId, player] of round.players) {
+      if (player.bets.length === 0) continue;
+
+      const { gameResult, newBalance } = playerGameResults.get(userId)!;
+
       this.sendToUser(userId, {
         type: "SPIN_RESULT",
         payload: {
           roundId: round.roundId,
           phase: "results",
           spinResult,
-          allPlayerResults,
+          allPlayerResults, // Now contains ALL players' results
           yourResult: {
             bets: player.bets,
             totalBet: gameResult.totalBet,
@@ -433,7 +449,7 @@ export class GameRoundManager {
             roundId: round.roundId,
             phase: "results",
             spinResult,
-            allPlayerResults,
+            allPlayerResults, // Send complete results to spectators too
             yourResult: {
               bets: [],
               totalBet: 0,
@@ -1053,11 +1069,11 @@ export class GameRoundManager {
       return { success: false, error: "No bets to lock" };
     }
 
-    // Start the countdown
+    // Mark player as locked
     player.isLocked = true;
-    this.startBettingCountdown(roomId, { userId, username: player.username });
 
-    // Broadcast that player locked their bets
+    // Broadcast that player locked their bets BEFORE starting countdown
+    // This ensures PLAYER_LOCKED is received before BETTING_STARTED
     this.broadcastToRoom(roomId, {
       type: "PLAYER_LOCKED",
       payload: {
@@ -1066,6 +1082,9 @@ export class GameRoundManager {
       },
       timestamp: Date.now(),
     });
+
+    // Start the countdown (broadcasts BETTING_STARTED)
+    this.startBettingCountdown(roomId, { userId, username: player.username });
 
     return { success: true };
   }
