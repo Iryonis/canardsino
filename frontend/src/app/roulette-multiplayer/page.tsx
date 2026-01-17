@@ -548,7 +548,7 @@ function MultiplayerRouletteContent({ config }: { config: RouletteConfig }) {
   useEffect(() => {
     if (state.error && !betError) {
       const timer = setTimeout(() => {
-        setBetError(state.error);
+        setBetError(state.error ?? "");
       }, 0);
       const clearTimer = setTimeout(() => setBetError(""), 5000);
       return () => {
