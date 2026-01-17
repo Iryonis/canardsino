@@ -36,29 +36,33 @@ export default function GamesPage() {
           name="European Roulette"
           img="/assets/img/roulette.png"
           price={10}
-          mode="Single Player"
-          url="/roulette"
+          mode="Single Player or Multiplayer"
+          url_single="/roulette"
+          url_multi="/roulette-multiplayer"
+        />
+        <GamesCard
+          name="Duck race"
+          img="/assets/img/duck-race.png"
+          price={2000}
+          mode="Multiplayer"
+          url_single="/"
+          url_multi="/duck-race"
         />
         <GamesCard
           name="Soon Available Game"
           img=""
           price={0}
           mode="/"
-          url="/"
+          url_single="/"
+          url_multi="/"
         />
         <GamesCard
           name="Soon Available Game"
           img=""
           price={0}
           mode="/"
-          url="/"
-        />
-        <GamesCard
-          name="Soon Available Game"
-          img=""
-          price={0}
-          mode="/"
-          url="/"
+          url_single="/"
+          url_multi="/"
         />
       </div>
     </div>

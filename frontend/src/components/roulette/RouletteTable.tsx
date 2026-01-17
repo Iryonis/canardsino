@@ -83,7 +83,7 @@ export default function RouletteTable({
               ))}
               <button
                 onClick={() => onColumnBet(3 - rowIdx)}
-                className="flex-1 ml-4 py-4 bg-blue-light hover:bg-blue-lightest text-blue-dark rounded-lg font-bold transition"
+                className="flex-1 ml-4 py-2 bg-blue-light hover:bg-blue-lightest text-blue-dark rounded-lg font-bold transition"
               >
                 Col{3 - rowIdx}
               </button>
@@ -96,7 +96,7 @@ export default function RouletteTable({
               <button
                 key={doz}
                 onClick={() => onDozenBet(doz)}
-                className="flex-1 py-4 bg-blue-light hover:bg-blue-lightest text-blue-dark rounded-lg font-bold transition"
+                className="flex-1 py-2 bg-blue-light hover:bg-blue-lightest text-blue-dark rounded-lg font-bold transition"
               >
                 {doz === 1 ? "1 to 12" : doz === 2 ? "13 to 24" : "25 to 36"}
               </button>
@@ -107,37 +107,37 @@ export default function RouletteTable({
           <div className="flex gap-1 mt-1">
             <button
               onClick={() => onSimpleBet("low", "1-18")}
-              className="flex-1 py-4 bg-blue-light hover:bg-blue-lightest text-blue-dark rounded-lg font-bold transition"
+              className="flex-1 py-2 bg-blue-light hover:bg-blue-lightest text-blue-dark rounded-lg font-bold transition"
             >
               1-18
             </button>
             <button
               onClick={() => onSimpleBet("even", "Even")}
-              className="flex-1 py-4 bg-blue-light hover:bg-blue-lightest text-blue-dark rounded-lg font-bold transition"
+              className="flex-1 py-2 bg-blue-light hover:bg-blue-lightest text-blue-dark rounded-lg font-bold transition"
             >
               Even
             </button>
             <button
               onClick={() => onSimpleBet("red", "Red")}
-              className="flex-1 py-4 bg-red-700 hover:bg-red-800 text-white rounded-lg font-bold transition"
+              className="flex-1 py-2 bg-red-700 hover:bg-red-800 text-white rounded-lg font-bold transition"
             >
               Red
             </button>
             <button
               onClick={() => onSimpleBet("black", "Black")}
-              className="flex-1 py-4 bg-gray-900 hover:bg-black text-white rounded-lg font-bold transition"
+              className="flex-1 py-2 bg-gray-900 hover:bg-black text-white rounded-lg font-bold transition"
             >
               Black
             </button>
             <button
               onClick={() => onSimpleBet("odd", "Odd")}
-              className="flex-1 py-4 bg-blue-light hover:bg-blue-lightest text-blue-dark rounded-lg font-bold transition"
+              className="flex-1 py-2 bg-blue-light hover:bg-blue-lightest text-blue-dark rounded-lg font-bold transition"
             >
               Odd
             </button>
             <button
               onClick={() => onSimpleBet("high", "19-36")}
-              className="flex-1 py-4 bg-blue-light hover:bg-blue-lightest text-blue-dark rounded-lg font-bold transition"
+              className="flex-1 py-2 bg-blue-light hover:bg-blue-lightest text-blue-dark rounded-lg font-bold transition"
             >
               19-36
             </button>

@@ -1,13 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "../../hooks/useAuth";
 import { BalanceUSD } from "../prices/BalanceUSD";
 
 export const LoggedNav = ({ balance }: { balance: number }) => {
   const { logout, user } = useAuth();
-  const [gamesMenuOpen, setGamesMenuOpen] = useState(false);
 
   return (
     <div className="flex items-center gap-4">

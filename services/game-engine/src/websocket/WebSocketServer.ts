@@ -61,7 +61,10 @@ export class WebSocketServerHandler {
   /**
    * Handle new WebSocket connection
    */
-  private async handleConnection(ws: ExtendedWebSocket, req: any): Promise<void> {
+  private async handleConnection(
+    ws: ExtendedWebSocket,
+    req: any
+  ): Promise<void> {
     console.log("🔗 New WebSocket connection attempt");
 
     // Extract token from query params
@@ -83,7 +86,8 @@ export class WebSocketServerHandler {
       };
 
       ws.userId = payload.userId;
-      ws.username = payload.username || `Player_${payload.userId.substring(0, 8)}`;
+      ws.username =
+        payload.username || `Player_${payload.userId.substring(0, 8)}`;
       ws.isAlive = true;
 
       console.log(`✅ User authenticated: ${ws.username} (${ws.userId})`);
@@ -99,7 +103,8 @@ export class WebSocketServerHandler {
       this.connections.set(ws.userId, ws);
 
       // Auto-join default room
-      const roomId = (query.room as string) || MULTIPLAYER_CONFIG.DEFAULT_ROOM_ID;
+      const roomId =
+        (query.room as string) || MULTIPLAYER_CONFIG.DEFAULT_ROOM_ID;
       ws.roomId = roomId;
 
       const roomState = await this.gameManager.handlePlayerJoin(
@@ -144,7 +149,10 @@ export class WebSocketServerHandler {
   /**
    * Handle incoming message from client
    */
-  private async handleMessage(ws: ExtendedWebSocket, data: Buffer): Promise<void> {
+  private async handleMessage(
+    ws: ExtendedWebSocket,
+    data: Buffer
+  ): Promise<void> {
     if (!ws.userId || !ws.username) {
       this.sendError(ws, "NOT_AUTHENTICATED", "Not authenticated");
       return;
@@ -174,12 +182,20 @@ export class WebSocketServerHandler {
           await this.handleClearBets(ws);
           break;
 
+        case "LOCK_BETS":
+          await this.handleLockBets(ws);
+          break;
+
         case "PING":
           this.send(ws, { type: "PONG", timestamp: Date.now() });
           break;
 
         default:
-          this.sendError(ws, "UNKNOWN_MESSAGE", `Unknown message type: ${message.type}`);
+          this.sendError(
+            ws,
+            "UNKNOWN_MESSAGE",
+            `Unknown message type: ${message.type}`
+          );
       }
     } catch (error) {
       console.error("Error parsing message:", error);
@@ -297,7 +313,11 @@ export class WebSocketServerHandler {
     );
 
     if (!result.success) {
-      this.sendError(ws, "REMOVE_FAILED", result.error || "Failed to remove bet");
+      this.sendError(
+        ws,
+        "REMOVE_FAILED",
+        result.error || "Failed to remove bet"
+      );
     }
   }
 
@@ -313,7 +333,27 @@ export class WebSocketServerHandler {
     const result = await this.gameManager.handleClearBets(ws.userId, ws.roomId);
 
     if (!result.success) {
-      this.sendError(ws, "CLEAR_FAILED", result.error || "Failed to clear bets");
+      this.sendError(
+        ws,
+        "CLEAR_FAILED",
+        result.error || "Failed to clear bets"
+      );
+    }
+  }
+
+  /**
+   * Handle lock bets request
+   */
+  private async handleLockBets(ws: ExtendedWebSocket): Promise<void> {
+    if (!ws.userId || !ws.roomId) {
+      this.sendError(ws, "NOT_IN_ROOM", "Not in a room");
+      return;
+    }
+
+    const result = await this.gameManager.handleLockBets(ws.userId, ws.roomId);
+
+    if (!result.success) {
+      this.sendError(ws, "LOCK_FAILED", result.error || "Failed to lock bets");
     }
   }
 
@@ -367,7 +407,11 @@ export class WebSocketServerHandler {
   /**
    * Broadcast message to all users in a room
    */
-  broadcastToRoom(roomId: string, message: ServerMessage, excludeUserId?: string): void {
+  broadcastToRoom(
+    roomId: string,
+    message: ServerMessage,
+    excludeUserId?: string
+  ): void {
     for (const [userId, ws] of this.connections) {
       if (ws.roomId === roomId && userId !== excludeUserId) {
         this.send(ws, message);
