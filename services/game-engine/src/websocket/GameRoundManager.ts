@@ -1056,11 +1056,11 @@ export class GameRoundManager {
       return { success: false, error: "Player not in room" };
     }
 
-    // Only allow locking if in waiting phase
-    if (round.phase !== "waiting") {
+    // Only allow locking if in waiting or betting phase
+    if (round.phase !== "waiting" && round.phase !== "betting") {
       return {
         success: false,
-        error: round.phase + "Can only lock bets in waiting phase",
+        error: `Can only lock bets in waiting or betting phase, not in ${round.phase}`,
       };
     }
 

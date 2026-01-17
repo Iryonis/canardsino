@@ -41,12 +41,12 @@ export default function GamesPage() {
           url_multi="/roulette-multiplayer"
         />
         <GamesCard
-          name="Soon Available Game"
-          img=""
-          price={0}
-          mode="/"
+          name="Duck race"
+          img="/assets/img/duck-race.png"
+          price={2000}
+          mode="Multiplayer"
           url_single="/"
-          url_multi="/"
+          url_multi="/duck-race"
         />
         <GamesCard
           name="Soon Available Game"

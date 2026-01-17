@@ -53,8 +53,9 @@ export default function GamesCard({
               src={img}
               aria-label="'An image representing the project, click on it to open the project website.'"
               alt="Game Image"
-              width={300}
+              width={600}
               height={300}
+              className="max-h-60 object-contain"
             />
           )}
         </div>
@@ -88,7 +89,7 @@ export default function GamesCard({
               onClick={(e) => e.stopPropagation()}
               className={`btn btn-blue hover:scale-105 active:scale-100 ${
                 url_single === "/"
-                  ? "cursor-not-allowed pointer-events-none"
+                  ? "hidden cursor-not-allowed pointer-events-none"
                   : "cursor-pointer"
               }`}
             >
