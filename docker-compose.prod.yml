@@ -75,7 +75,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8001
-      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017/?authSource=admin
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
       - MONGO_DB_NAME=casino_auth
       - JWT_SECRET=${JWT_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
@@ -116,7 +116,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8002
-      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017/?authSource=admin
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
       - MONGO_DB_NAME=casino_wallet
       - JWT_SECRET=${JWT_SECRET}
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
