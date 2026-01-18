@@ -164,8 +164,8 @@ export class StatsAggregator {
       netResult: game.netResult,
       createdAt: game.createdAt,
       bets: game.bets ? game.bets.map((bet: any) => ({
-        type: bet.betType,
-        values: bet.numbers || [],
+        type: bet.betType || bet.type,
+        values: bet.numbers || bet.values || [],
         amount: bet.amount,
         payout: bet.payout || 0,
         won: bet.won || false,
@@ -181,8 +181,8 @@ export class StatsAggregator {
       netResult: game.netResult,
       createdAt: game.createdAt,
       bets: game.bets ? game.bets.map((bet: any) => ({
-        type: bet.betType,
-        values: bet.numbers || [],
+        type: bet.betType || bet.type,
+        values: bet.numbers || bet.values || [],
         amount: bet.amount,
         payout: bet.payout || 0,
         won: bet.won || false,
@@ -232,6 +232,12 @@ export class StatsAggregator {
     }
 
     const gameType = newGameData.gameType || 'unknown';
+    
+    console.log(`🐛 updateStatsIncremental - gameType: ${gameType}, newGameData:`, {
+      gameType: newGameData.gameType,
+      gameId: newGameData.gameId,
+      betsCount: newGameData.bets?.length || 0
+    });
 
     // Extract game-specific details
     let details: any = {};
@@ -254,7 +260,13 @@ export class StatsAggregator {
       totalWin: newGameData.totalWin,
       netResult: newGameData.netResult,
       createdAt: new Date().toISOString(),
-      bets: newGameData.bets || [],
+      bets: newGameData.bets ? newGameData.bets.map((bet: any) => ({
+        type: bet.betType || bet.type,
+        values: bet.numbers || bet.values || [],
+        amount: bet.amount,
+        payout: bet.payout || 0,
+        won: bet.won || false,
+      })) : [],
       details,
     };
 

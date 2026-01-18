@@ -255,7 +255,7 @@ services:
       - NODE_ENV=production
       - PORT=8005
       - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017?authSource=admin
-      - MONGO_DB_NAME=casino_stats
+      - MONGO_DB_NAME=casino_games
       - JWT_SECRET=${JWT_SECRET}
       - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379

@@ -99,7 +99,7 @@ export class EventConsumer {
    * @param payload 
    */
   private async handleGameCompleted(payload: any): Promise<void> {
-    const { userId, gameId, totalBet, totalWin, netResult, winningNumber, bets, winningColor } = payload;
+    const { userId, gameId, gameType, totalBet, totalWin, netResult, winningNumber, bets, winningColor } = payload;
 
     console.log(`🎮 Handling game.completed for userId: ${userId}`);
 
@@ -107,6 +107,7 @@ export class EventConsumer {
       // Use incremental update with Redis cache
       const stats = await StatsAggregator.updateStatsIncremental(userId, {
         gameId,
+        gameType,
         totalBet,
         totalWin,
         netResult,

@@ -370,6 +370,8 @@ async function saveGameToDatabase(
       totalWin: gameResult.totalWin,
       netResult: gameResult.netResult,
       winningNumber: gameResult.spinResult.winningNumber,
+      winningColor: gameResult.spinResult.color,
+      bets: gameBets,
     }).catch(err => console.error('Failed to publish game.completed:', err));
 
     // Create or update GameSession
