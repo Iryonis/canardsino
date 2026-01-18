@@ -81,6 +81,15 @@ async function updateWalletBalance(
 const BIG_WIN_MULTIPLIER = 10;
 
 /**
+ * Type definition for random-org service response
+ */
+interface RandomOrgResponse {
+  number: number;
+  timestamp: number;
+  source: string;
+}
+
+/**
  * Extract user info from JWT token in request headers
  */
 function getUserFromToken(
@@ -233,15 +242,30 @@ export async function spin(req: Request, res: Response) {
         .status(400)
         .json({ error: "No bets placed. Place bets first." });
     }
-    //
-    //
-    //
-    // SHOULD USE RANDOM.ORG OR OTHER SERVICE IN PRODUCTION
-    //
-    //
-    //
-    const winningNumber = Math.floor(Math.random() * 37);
-    const source = "mock-random";
+
+    // Get random number from random-org service
+    let winningNumber: number;
+    let source: string;
+
+    try {
+      const randomOrgUrl = process.env.RANDOM_ORG_SERVICE || "http://random-org:8008";
+      const randomResponse = await fetch(`${randomOrgUrl}/roulette`);
+      
+      if (!randomResponse.ok) {
+        throw new Error(`Random service error: ${randomResponse.status}`);
+      }
+
+      const randomData = await randomResponse.json() as RandomOrgResponse;
+      winningNumber = randomData.number;
+      source = randomData.source;
+
+      console.log(`✅ Random number from ${source}: ${winningNumber}`);
+    } catch (error) {
+      console.error("⚠️ Failed to get random number from service, using fallback:", error);
+      // Fallback to Math.random if service is unavailable
+      winningNumber = Math.floor(Math.random() * 37);
+      source = "fallback-random";
+    }
 
     // Calculate game results
     const gameResult = RouletteLogic.calculateGameResult(
