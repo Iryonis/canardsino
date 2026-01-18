@@ -58,8 +58,8 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Swagger documentation
-app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// Swagger documentation (path matches NGINX route)
+app.use("/api/wallet/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Routes
 app.use("/wallet", walletRoutes);

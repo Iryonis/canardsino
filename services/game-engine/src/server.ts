@@ -84,8 +84,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Swagger documentation
-app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// Swagger documentation (path matches NGINX route)
+app.use("/api/games/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Health check
 app.get("/health", (req, res) => {

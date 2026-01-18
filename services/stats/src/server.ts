@@ -66,8 +66,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Swagger documentation
-app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// Swagger documentation (path matches NGINX route)
+app.use("/api/stats/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 export function healthCheck(req: express.Request, res: express.Response) {
   res.json({

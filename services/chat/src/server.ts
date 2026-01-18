@@ -43,8 +43,8 @@ const wss = new WebSocketServer({ server: httpServer });
 app.use(cors());
 app.use(express.json());
 
-// Swagger documentation
-app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// Swagger documentation (path matches NGINX route)
+app.use("/api/chat/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Initialize services
 const wsService = new WebSocketService(wss);

@@ -341,15 +341,7 @@ Chaque microservice expose sa documentation OpenAPI via Swagger UI :
 | Stats | http://localhost/api/stats/docs |
 | Prices (CMC) | http://localhost/api/prices/docs |
 
-**Accès direct aux services** (sans NGINX) :
-- Auth: http://localhost:8001/docs
-- Wallet: http://localhost:8002/docs
-- Game Engine: http://localhost:8003/docs
-- Chat: http://localhost:8004/docs
-- Stats: http://localhost:8005/docs
-- CoinMarketCap: http://localhost:8007/docs
-
-**Fichier OpenAPI statique** : `docs/openapi.yaml` (documentation centralisee)
+**Fichier OpenAPI statique** : `docs/openapi.yaml`
 
 **Architecture** : Voir diagrammes ci-dessus
 

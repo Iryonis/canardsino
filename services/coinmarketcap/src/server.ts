@@ -41,8 +41,8 @@ const PORT = process.env.PORT || 8007;
 app.use(cors());
 app.use(express.json());
 
-// Swagger documentation
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// Swagger documentation (path matches NGINX route)
+app.use('/api/prices/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use('/prices', routes);
 
