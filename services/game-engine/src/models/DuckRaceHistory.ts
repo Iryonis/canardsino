@@ -113,9 +113,9 @@ const DuckRaceHistorySchema = new Schema<IDuckRaceHistory>(
       required: true,
       validate: {
         validator: function (v: IDuckRaceParticipant[]) {
-          return v.length >= 2 && v.length <= 5;
+          return v.length >= 1 && v.length <= 5;
         },
-        message: "Race must have between 2 and 5 participants",
+        message: "Race must have between 1 and 5 participants",
       },
     },
     winnerId: {

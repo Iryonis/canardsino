@@ -49,6 +49,15 @@ export class StatsAggregator {
           parity: game.rouletteDetails?.parity,
           range: game.rouletteDetails?.range,
         };
+      case 'duck-race':
+        return {
+          lane: game.metadata?.lane,
+          finalPosition: game.metadata?.finalPosition,
+          rank: game.metadata?.rank,
+          winnerId: game.metadata?.winnerId,
+          winnerUsername: game.metadata?.winnerUsername,
+          totalPlayers: game.metadata?.totalPlayers,
+        };
       default:
         return game.metadata || {};
     }
@@ -231,6 +240,8 @@ export class StatsAggregator {
         winningNumber: newGameData.winningNumber,
         winningColor: newGameData.winningColor,
       };
+    } else if (gameType === 'duck-race') {
+      details = newGameData.details || {};
     } else {
       details = newGameData.details || {};
     }

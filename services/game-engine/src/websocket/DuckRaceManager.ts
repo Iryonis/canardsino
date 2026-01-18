@@ -1014,6 +1014,7 @@ export class DuckRaceManager {
   ): Promise<void> {
     // Import model dynamically to avoid circular deps
     const { DuckRaceHistory } = await import("../models/DuckRaceHistory");
+    const { GameHistory } = await import("../models/GameHistory");
     const { publishGameCompleted } = await import("../events/publisher");
 
     try {
@@ -1042,15 +1043,56 @@ export class DuckRaceManager {
 
       await raceHistory.save();
 
-      // Publish event for each participant
+      // Save to GameHistory for each participant (for stats aggregation)
       for (const participant of participants) {
+        const gameHistory = new GameHistory({
+          userId: participant.userId,
+          sessionId: round.roomId,
+          gameType: "duck-race",
+          bets: [
+            {
+              betType: "duck-race",
+              numbers: [participant.lane],
+              amount: participant.betAmount,
+              payout: participant.winAmount,
+              won: participant.userId === winner.userId,
+              multiplier: participant.userId === winner.userId ? participant.winAmount / participant.betAmount : 0,
+            },
+          ],
+          totalBet: participant.betAmount,
+          totalWin: participant.winAmount,
+          netResult: participant.netResult,
+          metadata: {
+            roundId: round.roundId,
+            lane: participant.lane,
+            finalPosition: participant.finalPosition,
+            rank: participant.rank,
+            winnerId: winner.userId,
+            winnerUsername: winner.username,
+            totalPlayers: participants.length,
+          },
+        });
+
+        await gameHistory.save();
+
+        // Publish event for stats service
         publishGameCompleted({
           userId: participant.userId,
-          gameId: raceHistory._id.toString(),
+          gameId: gameHistory._id.toString(),
           gameType: "duck-race",
           totalBet: participant.betAmount,
           totalWin: participant.winAmount,
           netResult: participant.netResult,
+          bets: [
+            {
+              betType: "duck-race",
+              numbers: [participant.lane],
+              amount: participant.betAmount,
+              payout: participant.winAmount,
+              won: participant.userId === winner.userId,
+              multiplier: participant.userId === winner.userId ? participant.winAmount / participant.betAmount : 0,
+            },
+          ],
         }).catch((err) => console.error("Failed to publish game.completed:", err));
       }
     } catch (error) {

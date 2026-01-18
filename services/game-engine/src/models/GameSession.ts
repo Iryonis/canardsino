@@ -19,11 +19,16 @@ export interface ISessionPlayer {
 }
 
 /**
+ * Supported game types
+ */
+export type GameType = "roulette" | "duck-race";
+
+/**
  * GameSession document interface
  */
 export interface IGameSession extends Document {
   sessionId: string;
-  gameType: "roulette";
+  gameType: GameType;
   sessionType: "single" | "multiplayer";
   status: "active" | "completed" | "cancelled" | "paused";
   players: ISessionPlayer[];

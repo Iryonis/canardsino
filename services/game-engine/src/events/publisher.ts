@@ -70,6 +70,7 @@ export async function publishGameCompleted(data: {
   totalWin: number;
   netResult: number;
   winningNumber?: number;
+  bets?: any[];
 }): Promise<void> {
   await publishEvent('game.completed', data);
 }

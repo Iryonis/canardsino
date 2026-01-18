@@ -8,6 +8,15 @@ interface RouletteDetails {
   winningColor?: string;
 }
 
+interface DuckRaceDetails {
+  lane?: number;
+  finalPosition?: number;
+  rank?: number;
+  winnerId?: string;
+  winnerUsername?: string;
+  totalPlayers?: number;
+}
+
 interface Bet {
   type: string;
   values: number[];
@@ -22,7 +31,7 @@ interface RecentGame {
   netResult: number;
   createdAt: string;
   bets?: Bet[];
-  details?: RouletteDetails;
+  details?: RouletteDetails | DuckRaceDetails;
 }
 
 interface RecentGamesTableProps {
@@ -88,27 +97,37 @@ export default function RecentGamesTable({
               >
                 <td className="p-3 text-blue-lightest capitalize">{game.gameType}</td>
                 <td className="p-3">
-                  {game.details?.winningNumber !== undefined && (
+                  {game.gameType === 'roulette' && game.details && 'winningNumber' in game.details && (game.details as RouletteDetails).winningNumber !== undefined && (
                     <div className="flex items-center gap-2">
                       <span 
                         className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm ${
-                          game.details.winningColor === 'red' 
+                          (game.details as RouletteDetails).winningColor === 'red' 
                             ? 'bg-red-600' 
-                            : game.details.winningColor === 'black'
+                            : (game.details as RouletteDetails).winningColor === 'black'
                             ? 'bg-gray-900 border border-gray-600'
                             : 'bg-green-600'
                         }`}
                       >
-                        {game.details.winningNumber}
+                        {(game.details as RouletteDetails).winningNumber}
                       </span>
                       <span className={`text-xs uppercase font-medium ${
-                        game.details.winningColor === 'red'
+                        (game.details as RouletteDetails).winningColor === 'red'
                           ? 'text-red-400'
-                          : game.details.winningColor === 'black'
+                          : (game.details as RouletteDetails).winningColor === 'black'
                           ? 'text-gray-300'
                           : 'text-green-400'
                       }`}>
-                        {game.details.winningColor || 'green'}
+                        {(game.details as RouletteDetails).winningColor || 'green'}
+                      </span>
+                    </div>
+                  )}
+                  {game.gameType === 'duck-race' && game.details && 'lane' in game.details && (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center justify-center px-2 py-1 bg-yellow-600 text-white font-bold text-xs rounded">
+                        🦆 Lane {(game.details as DuckRaceDetails).lane}
+                      </span>
+                      <span className="text-xs text-blue-light">
+                        {(game.details as DuckRaceDetails).rank === 1 ? '🏆 Winner!' : `Rank #${(game.details as DuckRaceDetails).rank}`}
                       </span>
                     </div>
                   )}

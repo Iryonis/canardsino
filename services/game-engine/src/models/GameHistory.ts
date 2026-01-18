@@ -31,12 +31,17 @@ export interface IRouletteDetails {
 }
 
 /**
+ * Supported game types
+ */
+export type GameType = "roulette" | "duck-race";
+
+/**
  * GameHistory document interface
  */
 export interface IGameHistory extends Document {
   userId: string;
   sessionId: string;
-  gameType: "roulette";
+  gameType: GameType;
   bets: IGameBet[];
   totalBet: number;
   totalWin: number;

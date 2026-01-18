@@ -6,12 +6,17 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 /**
+ * Supported game types
+ */
+export type GameType = "roulette" | "duck-race";
+
+/**
  * BigWin document interface
  */
 export interface IBigWin extends Document {
   userId: string;
   username: string;
-  gameType: "roulette";
+  gameType: GameType;
   betType: string;
   betAmount: number;
   winAmount: number;
