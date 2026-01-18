@@ -31,6 +31,7 @@ import {
   type ErrorPayload,
   type PlayerJoinedPayload,
   type PlayerLeftPayload,
+  type PlayerLockedPayload,
   type BettingStartedPayload,
   type WaitingForBetsPayload,
 } from "@/hooks/useRouletteWebSocket";
@@ -53,6 +54,7 @@ interface MultiplayerState {
   playerCount: number;
 
   // Your state
+  yourUserId: string;
   yourBets: Bet[];
   yourTotalBet: number;
   yourBalance: number;
@@ -88,6 +90,10 @@ type Action =
   | { type: "ROUND_COUNTDOWN"; payload: RoundCountdownPayload }
   | { type: "SPIN_STARTING"; payload: SpinStartingPayload }
   | { type: "SPIN_RESULT"; payload: SpinResultPayload }
+  | {
+      type: "SET_PLAYER_LOCKED";
+      payload: { userId: string; isLocked: boolean };
+    }
   | { type: "RESET" };
 
 // Initial state
@@ -101,6 +107,7 @@ const initialState: MultiplayerState = {
   timeRemaining: 0,
   players: [],
   playerCount: 0,
+  yourUserId: "",
   yourBets: [],
   yourTotalBet: 0,
   yourBalance: 0,
@@ -141,6 +148,7 @@ function reducer(state: MultiplayerState, action: Action): MultiplayerState {
         timeRemaining: payload.timeRemaining,
         players: payload.players,
         playerCount: payload.players.length,
+        yourUserId: payload.yourUserId,
         yourBets: payload.yourBets,
         yourTotalBet: payload.yourBets.reduce((sum, b) => sum + b.amount, 0),
         yourBalance: payload.yourBalance,
@@ -172,6 +180,7 @@ function reducer(state: MultiplayerState, action: Action): MultiplayerState {
             bets: [],
             totalBet: 0,
             isConnected: true,
+            isLocked: false,
           },
         ],
         playerCount: payload.playerCount,
@@ -300,8 +309,13 @@ function reducer(state: MultiplayerState, action: Action): MultiplayerState {
         spinResult: null,
         allPlayerResults: [],
         yourResult: null,
-        // Clear player bets
-        players: state.players.map((p) => ({ ...p, bets: [], totalBet: 0 })),
+        // Clear player bets and locked state
+        players: state.players.map((p) => ({
+          ...p,
+          bets: [],
+          totalBet: 0,
+          isLocked: false,
+        })),
       };
     }
 
@@ -310,7 +324,9 @@ function reducer(state: MultiplayerState, action: Action): MultiplayerState {
         ...state,
         phase: action.payload.phase,
         timeRemaining: action.payload.timeRemaining,
-        canBet: action.payload.phase === "waiting" || action.payload.phase === "betting",
+        canBet:
+          action.payload.phase === "waiting" ||
+          action.payload.phase === "betting",
         isSpinning: action.payload.phase === "spinning",
         isWaiting: action.payload.phase === "waiting",
       };
@@ -322,6 +338,16 @@ function reducer(state: MultiplayerState, action: Action): MultiplayerState {
         canBet: false,
         isSpinning: true,
         isWaiting: false,
+        // Set spin result with winning number from SPIN_STARTING payload
+        spinResult:
+          action.payload.winningNumber !== undefined
+            ? {
+                winningNumber: action.payload.winningNumber,
+                color: "red", // Will be properly set in SPIN_RESULT
+                parity: "even",
+                range: "low",
+              }
+            : state.spinResult,
       };
 
     case "SPIN_RESULT": {
@@ -338,6 +364,18 @@ function reducer(state: MultiplayerState, action: Action): MultiplayerState {
         isSpinning: false,
         isWaiting: false,
         lastWinningNumber: payload.spinResult.winningNumber,
+        // Reset all players' locked state
+        players: state.players.map((p) => ({ ...p, isLocked: false })),
+      };
+    }
+
+    case "SET_PLAYER_LOCKED": {
+      const { userId, isLocked } = action.payload;
+      return {
+        ...state,
+        players: state.players.map((p) =>
+          p.userId === userId ? { ...p, isLocked } : p,
+        ),
       };
     }
 
@@ -354,9 +392,16 @@ interface MultiplayerContextType {
   state: MultiplayerState;
   connect: () => void;
   disconnect: () => void;
-  placeBet: (bet: { type: string; value?: string | number; amount: number; numbers?: number[] }) => void;
+  placeBet: (bet: {
+    type: string;
+    value?: string | number;
+    amount: number;
+    numbers?: number[];
+  }) => void;
   removeBet: (betIndex: number) => void;
   clearBets: () => void;
+  lockBets: () => void;
+  setPlayerLocked: (userId: string, isLocked: boolean) => void;
 }
 
 const MultiplayerContext = createContext<MultiplayerContextType | null>(null);
@@ -385,6 +430,13 @@ export function RouletteMultiplayerProvider({
 
   const handlePlayerLeft = useCallback((payload: PlayerLeftPayload) => {
     dispatch({ type: "PLAYER_LEFT", payload });
+  }, []);
+
+  const handlePlayerLocked = useCallback((payload: PlayerLockedPayload) => {
+    dispatch({
+      type: "SET_PLAYER_LOCKED",
+      payload: { userId: payload.userId, isLocked: true },
+    });
   }, []);
 
   const handleBetPlaced = useCallback((payload: BetPlacedPayload) => {
@@ -433,6 +485,7 @@ export function RouletteMultiplayerProvider({
     onRoomState: handleRoomState,
     onPlayerJoined: handlePlayerJoined,
     onPlayerLeft: handlePlayerLeft,
+    onPlayerLocked: handlePlayerLocked,
     onBetPlaced: handleBetPlaced,
     onBetRemoved: handleBetRemoved,
     onBetsCleared: handleBetsCleared,
@@ -454,12 +507,20 @@ export function RouletteMultiplayerProvider({
   // Auto-connect on mount if enabled
   useEffect(() => {
     if (autoConnect) {
-      connect();
+      // Add a small delay to ensure token is loaded
+      const timer = setTimeout(() => {
+        connect();
+      }, 100);
+      return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoConnect]);
 
   // Context value
+  const setPlayerLocked = useCallback((userId: string, isLocked: boolean) => {
+    dispatch({ type: "SET_PLAYER_LOCKED", payload: { userId, isLocked } });
+  }, []);
+
   const contextValue = useMemo<MultiplayerContextType>(
     () => ({
       state,
@@ -468,8 +529,19 @@ export function RouletteMultiplayerProvider({
       placeBet: ws.placeBet,
       removeBet: ws.removeBet,
       clearBets: ws.clearBets,
+      lockBets: ws.lockBets,
+      setPlayerLocked,
     }),
-    [state, connect, ws.disconnect, ws.placeBet, ws.removeBet, ws.clearBets]
+    [
+      state,
+      connect,
+      ws.disconnect,
+      ws.placeBet,
+      ws.removeBet,
+      ws.clearBets,
+      ws.lockBets,
+      setPlayerLocked,
+    ],
   );
 
   return (
@@ -484,11 +556,18 @@ export function useRouletteMultiplayer() {
   const context = useContext(MultiplayerContext);
   if (!context) {
     throw new Error(
-      "useRouletteMultiplayer must be used within a RouletteMultiplayerProvider"
+      "useRouletteMultiplayer must be used within a RouletteMultiplayerProvider",
     );
   }
   return context;
 }
 
 // Export types
-export type { MultiplayerState, Bet, PlayerInfo, SpinResult, PlayerResult, YourResult };
+export type {
+  MultiplayerState,
+  Bet,
+  PlayerInfo,
+  SpinResult,
+  PlayerResult,
+  YourResult,
+};

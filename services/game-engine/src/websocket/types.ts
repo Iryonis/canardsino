@@ -24,6 +24,8 @@ export interface PlayerInfo {
   totalBet: number;
   /** Whether player is connected */
   isConnected: boolean;
+  /** Whether player has locked their bets */
+  isLocked: boolean;
 }
 
 export interface GameRound {
@@ -65,6 +67,7 @@ export type ClientMessageType =
   | "PLACE_BET"
   | "REMOVE_BET"
   | "CLEAR_BETS"
+  | "LOCK_BETS"
   | "PING";
 
 export interface JoinRoomPayload {
@@ -91,7 +94,11 @@ export interface RemoveBetPayload {
 
 export interface ClientMessage {
   type: ClientMessageType;
-  payload?: JoinRoomPayload | LeaveRoomPayload | PlaceBetPayload | RemoveBetPayload;
+  payload?:
+    | JoinRoomPayload
+    | LeaveRoomPayload
+    | PlaceBetPayload
+    | RemoveBetPayload;
 }
 
 // ============================================================================
@@ -102,6 +109,7 @@ export type ServerMessageType =
   | "ROOM_STATE"
   | "PLAYER_JOINED"
   | "PLAYER_LEFT"
+  | "PLAYER_LOCKED"
   | "BET_PLACED"
   | "BET_REMOVED"
   | "BETS_CLEARED"
@@ -126,11 +134,14 @@ export interface RoomStatePayload {
     bets: Bet[];
     totalBet: number;
     isConnected: boolean;
+    isLocked: boolean;
   }>;
   /** Your current bets (for reconnection) */
   yourBets: Bet[];
   /** Your current balance */
   yourBalance: number;
+  /** Your user ID */
+  yourUserId: string;
 }
 
 export interface PlayerJoinedPayload {
@@ -143,6 +154,11 @@ export interface PlayerLeftPayload {
   userId: string;
   username: string;
   playerCount: number;
+}
+
+export interface PlayerLockedPayload {
+  userId: string;
+  username: string;
 }
 
 export interface BetPlacedPayload {
@@ -199,6 +215,8 @@ export interface SpinStartingPayload {
   totalBetsAllPlayers: number;
   /** Number of players with bets */
   playersWithBets: number;
+  /** The winning number for this spin */
+  winningNumber: number;
 }
 
 export interface SpinResultPayload {
@@ -209,6 +227,7 @@ export interface SpinResultPayload {
   allPlayerResults: Array<{
     userId: string;
     username: string;
+    bets: Bet[];
     totalBet: number;
     totalWin: number;
     netResult: number;
@@ -229,7 +248,12 @@ export interface SpinResultPayload {
 
 export interface BalanceUpdatePayload {
   balance: number;
-  reason: "bet_placed" | "bet_removed" | "bets_cleared" | "win_credited" | "refund";
+  reason:
+    | "bet_placed"
+    | "bet_removed"
+    | "bets_cleared"
+    | "win_credited"
+    | "refund";
 }
 
 export interface ErrorPayload {
@@ -243,6 +267,7 @@ export interface ServerMessage {
     | RoomStatePayload
     | PlayerJoinedPayload
     | PlayerLeftPayload
+    | PlayerLockedPayload
     | BetPlacedPayload
     | BetRemovedPayload
     | BetsClearedPayload
@@ -275,9 +300,9 @@ export const MULTIPLAYER_CONFIG = {
   /** Duration of betting phase in seconds (starts when first bet is placed) */
   BETTING_PHASE_DURATION: 30,
   /** Duration of spinning phase in seconds */
-  SPINNING_PHASE_DURATION: 3,
+  SPINNING_PHASE_DURATION: 5,
   /** Duration of results phase in seconds */
-  RESULTS_PHASE_DURATION: 5,
+  RESULTS_PHASE_DURATION: 20,
   /** Default room ID */
   DEFAULT_ROOM_ID: "main",
   /** Ping interval in milliseconds */

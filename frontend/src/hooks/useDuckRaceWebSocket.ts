@@ -8,7 +8,12 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { tokenManager } from "@/lib/tokenManager";
 
 // Game phase types
-export type DuckRacePhase = "waiting" | "betting" | "countdown" | "racing" | "finished";
+export type DuckRacePhase =
+  | "waiting"
+  | "betting"
+  | "countdown"
+  | "racing"
+  | "finished";
 
 // Duck colors
 export type DuckColor = "yellow" | "orange" | "blue" | "green" | "pink";
@@ -181,7 +186,11 @@ export type DuckRaceServerMessage =
   | { type: "ROOM_UPDATED"; payload: RoomUpdatedPayload; timestamp: number }
   | { type: "ROOM_DELETED"; payload: RoomDeletedPayload; timestamp: number }
   | { type: "RACE_STATE"; payload: RaceStatePayload; timestamp: number }
-  | { type: "PLAYER_JOINED"; payload: DuckPlayerJoinedPayload; timestamp: number }
+  | {
+      type: "PLAYER_JOINED";
+      payload: DuckPlayerJoinedPayload;
+      timestamp: number;
+    }
   | { type: "PLAYER_LEFT"; payload: DuckPlayerLeftPayload; timestamp: number }
   | { type: "PLAYER_READY"; payload: PlayerReadyPayload; timestamp: number }
   | { type: "ALL_READY"; payload: AllReadyPayload; timestamp: number }
@@ -189,15 +198,26 @@ export type DuckRaceServerMessage =
   | { type: "RACE_STARTED"; payload: RaceStartedPayload; timestamp: number }
   | { type: "RACE_UPDATE"; payload: RaceUpdatePayload; timestamp: number }
   | { type: "RACE_FINISHED"; payload: RaceFinishedPayload; timestamp: number }
-  | { type: "WAITING_FOR_PLAYERS"; payload: WaitingForPlayersPayload; timestamp: number }
-  | { type: "BALANCE_UPDATE"; payload: DuckBalanceUpdatePayload; timestamp: number }
+  | {
+      type: "WAITING_FOR_PLAYERS";
+      payload: WaitingForPlayersPayload;
+      timestamp: number;
+    }
+  | {
+      type: "BALANCE_UPDATE";
+      payload: DuckBalanceUpdatePayload;
+      timestamp: number;
+    }
   | { type: "ERROR"; payload: DuckErrorPayload; timestamp: number }
   | { type: "PONG"; timestamp: number };
 
 // Client message types
 export type DuckRaceClientMessage =
   | { type: "GET_ROOMS" }
-  | { type: "CREATE_ROOM"; payload: { betAmount: number; isPersistent: boolean; roomName?: string } }
+  | {
+      type: "CREATE_ROOM";
+      payload: { betAmount: number; isPersistent: boolean; roomName?: string };
+    }
   | { type: "JOIN_ROOM"; payload: { roomId: string } }
   | { type: "LEAVE_ROOM" }
   | { type: "SET_READY"; payload: { isReady: boolean } }
@@ -230,34 +250,45 @@ export interface UseDuckRaceWebSocketReturn {
   connect: () => void;
   disconnect: () => void;
   getRooms: () => void;
-  createRoom: (betAmount: number, isPersistent: boolean, roomName?: string) => void;
+  createRoom: (
+    betAmount: number,
+    isPersistent: boolean,
+    roomName?: string,
+  ) => void;
   joinRoom: (roomId: string) => void;
   leaveRoom: () => void;
   setReady: (isReady: boolean) => void;
 }
 
-const WS_URL = typeof window !== "undefined"
-  ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/games/duck-race/ws`
-  : "";
+const WS_URL =
+  typeof window !== "undefined"
+    ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/games/duck-race/ws`
+    : "";
 
 const RECONNECT_DELAY = 1000;
 const MAX_RECONNECT_DELAY = 30000;
 const PING_INTERVAL = 30000;
+const TOKEN_RETRY_DELAY = 100; // Retry getting token after 100ms if not available
+const TOKEN_MAX_RETRIES = 50; // Max 5 seconds of retries
 
 export function useDuckRaceWebSocket(
-  options: UseDuckRaceWebSocketOptions = {}
+  options: UseDuckRaceWebSocketOptions = {},
 ): UseDuckRaceWebSocketReturn {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectDelayRef = useRef(RECONNECT_DELAY);
   const manualDisconnectRef = useRef(false);
+  const tokenRetryCountRef = useRef(0);
 
   const [isConnected, setIsConnected] = useState(false);
 
   // Store callbacks in refs to avoid stale closures
   const optionsRef = useRef(options);
-  optionsRef.current = options;
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   const clearTimers = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -340,70 +371,90 @@ export function useDuckRaceWebSocket(
   }, []);
 
   const connect = useCallback(() => {
-    // Don't connect if already connected or connecting
-    if (wsRef.current?.readyState === WebSocket.OPEN ||
-        wsRef.current?.readyState === WebSocket.CONNECTING) {
-      return;
-    }
+    const attemptConnect = () => {
+      // Don't connect if already connected or connecting
+      if (
+        wsRef.current?.readyState === WebSocket.OPEN ||
+        wsRef.current?.readyState === WebSocket.CONNECTING
+      ) {
+        return;
+      }
 
-    // Get token
-    const token = tokenManager.getAccessToken();
-    if (!token) {
-      console.error("No access token available for Duck Race WebSocket connection");
-      optionsRef.current.onError?.({ code: "AUTH_ERROR", message: "No access token available" });
-      return;
-    }
-
-    manualDisconnectRef.current = false;
-
-    const wsUrl = `${WS_URL}?token=${encodeURIComponent(token)}`;
-    console.log("Duck Race connecting to:", wsUrl);
-
-    try {
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-      console.log("Duck Race WebSocket created, readyState:", ws.readyState);
-
-    ws.onopen = () => {
-      console.log("Duck Race WebSocket connected");
-      setIsConnected(true);
-      optionsRef.current.onConnectionChange?.(true);
-      reconnectDelayRef.current = RECONNECT_DELAY;
-
-      // Start ping interval
-      pingIntervalRef.current = setInterval(() => {
-        sendMessage({ type: "PING" });
-      }, PING_INTERVAL);
-    };
-
-    ws.onmessage = handleMessage;
-
-    ws.onclose = (event) => {
-      console.log("Duck Race WebSocket closed:", event.code, event.reason);
-      setIsConnected(false);
-      optionsRef.current.onConnectionChange?.(false);
-      clearTimers();
-
-      // Reconnect unless manually disconnected
-      if (!manualDisconnectRef.current) {
-        reconnectTimeoutRef.current = setTimeout(() => {
-          console.log(`Reconnecting Duck Race in ${reconnectDelayRef.current}ms...`);
-          connect();
-          // Exponential backoff
-          reconnectDelayRef.current = Math.min(
-            reconnectDelayRef.current * 2,
-            MAX_RECONNECT_DELAY
+      const token = tokenManager.getAccessToken();
+      if (!token) {
+        if (tokenRetryCountRef.current < TOKEN_MAX_RETRIES) {
+          tokenRetryCountRef.current++;
+          console.warn(
+            `No access token yet for Duck Race WebSocket, retrying... (${tokenRetryCountRef.current}/${TOKEN_MAX_RETRIES})`,
           );
-        }, reconnectDelayRef.current);
+          reconnectTimeoutRef.current = setTimeout(() => {
+            attemptConnect();
+          }, TOKEN_RETRY_DELAY);
+          return;
+        }
+        console.error(
+          "No access token available for Duck Race WebSocket connection after retries",
+        );
+        optionsRef.current.onError?.({
+          code: "AUTH_ERROR",
+          message: "No access token available",
+        });
+        return;
+      }
+
+      tokenRetryCountRef.current = 0;
+      manualDisconnectRef.current = false;
+
+      const wsUrl = `${WS_URL}?token=${encodeURIComponent(token)}`;
+      console.log("Duck Race connecting to:", wsUrl);
+
+      try {
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+        console.log("Duck Race WebSocket created, readyState:", ws.readyState);
+
+        ws.onopen = () => {
+          console.log("Duck Race WebSocket connected");
+          setIsConnected(true);
+          optionsRef.current.onConnectionChange?.(true);
+          reconnectDelayRef.current = RECONNECT_DELAY;
+
+          pingIntervalRef.current = setInterval(() => {
+            sendMessage({ type: "PING" });
+          }, PING_INTERVAL);
+        };
+
+        ws.onmessage = handleMessage;
+
+        ws.onclose = (event) => {
+          console.log("Duck Race WebSocket closed:", event.code, event.reason);
+          setIsConnected(false);
+          optionsRef.current.onConnectionChange?.(false);
+          clearTimers();
+
+          if (!manualDisconnectRef.current) {
+            reconnectTimeoutRef.current = setTimeout(() => {
+              console.log(
+                `Reconnecting Duck Race in ${reconnectDelayRef.current}ms...`,
+              );
+              attemptConnect();
+              reconnectDelayRef.current = Math.min(
+                reconnectDelayRef.current * 2,
+                MAX_RECONNECT_DELAY,
+              );
+            }, reconnectDelayRef.current);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error("Duck Race WebSocket error:", error);
+        };
+      } catch (err) {
+        console.error("Duck Race WebSocket creation error:", err);
       }
     };
 
-    ws.onerror = (error) => {
-      console.error("Duck Race WebSocket error:", error);
-    };
-    } catch (err) {
-      console.error("Duck Race WebSocket creation error:", err);
-    }
+    attemptConnect();
   }, [handleMessage, sendMessage, clearTimers]);
 
   const disconnect = useCallback(() => {
@@ -421,30 +472,39 @@ export function useDuckRaceWebSocket(
     sendMessage({ type: "GET_ROOMS" });
   }, [sendMessage]);
 
-  const createRoom = useCallback((betAmount: number, isPersistent: boolean, roomName?: string) => {
-    sendMessage({
-      type: "CREATE_ROOM",
-      payload: { betAmount, isPersistent, roomName },
-    });
-  }, [sendMessage]);
+  const createRoom = useCallback(
+    (betAmount: number, isPersistent: boolean, roomName?: string) => {
+      sendMessage({
+        type: "CREATE_ROOM",
+        payload: { betAmount, isPersistent, roomName },
+      });
+    },
+    [sendMessage],
+  );
 
-  const joinRoom = useCallback((roomId: string) => {
-    sendMessage({
-      type: "JOIN_ROOM",
-      payload: { roomId },
-    });
-  }, [sendMessage]);
+  const joinRoom = useCallback(
+    (roomId: string) => {
+      sendMessage({
+        type: "JOIN_ROOM",
+        payload: { roomId },
+      });
+    },
+    [sendMessage],
+  );
 
   const leaveRoom = useCallback(() => {
     sendMessage({ type: "LEAVE_ROOM" });
   }, [sendMessage]);
 
-  const setReady = useCallback((isReady: boolean) => {
-    sendMessage({
-      type: "SET_READY",
-      payload: { isReady },
-    });
-  }, [sendMessage]);
+  const setReady = useCallback(
+    (isReady: boolean) => {
+      sendMessage({
+        type: "SET_READY",
+        payload: { isReady },
+      });
+    },
+    [sendMessage],
+  );
 
   // Cleanup on unmount
   useEffect(() => {

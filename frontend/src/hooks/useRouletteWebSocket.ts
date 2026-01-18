@@ -21,6 +21,7 @@ export interface PlayerInfo {
   bets: Bet[];
   totalBet: number;
   isConnected: boolean;
+  isLocked: boolean;
 }
 
 export interface SpinResult {
@@ -35,6 +36,7 @@ export interface SpinResult {
 export interface PlayerResult {
   userId: string;
   username: string;
+  bets: Bet[];
   totalBet: number;
   totalWin: number;
   netResult: number;
@@ -59,6 +61,7 @@ export interface RoomStatePayload {
   players: PlayerInfo[];
   yourBets: Bet[];
   yourBalance: number;
+  yourUserId: string;
 }
 
 export interface PlayerJoinedPayload {
@@ -71,6 +74,11 @@ export interface PlayerLeftPayload {
   userId: string;
   username: string;
   playerCount: number;
+}
+
+export interface PlayerLockedPayload {
+  userId: string;
+  username: string;
 }
 
 export interface BetPlacedPayload {
@@ -122,6 +130,7 @@ export interface SpinStartingPayload {
   phase: "spinning";
   totalBetsAllPlayers: number;
   playersWithBets: number;
+  winningNumber: number;
 }
 
 export interface SpinResultPayload {
@@ -142,6 +151,7 @@ export type ServerMessage =
   | { type: "ROOM_STATE"; payload: RoomStatePayload; timestamp: number }
   | { type: "PLAYER_JOINED"; payload: PlayerJoinedPayload; timestamp: number }
   | { type: "PLAYER_LEFT"; payload: PlayerLeftPayload; timestamp: number }
+  | { type: "PLAYER_LOCKED"; payload: PlayerLockedPayload; timestamp: number }
   | { type: "BET_PLACED"; payload: BetPlacedPayload; timestamp: number }
   | { type: "BET_REMOVED"; payload: BetRemovedPayload; timestamp: number }
   | { type: "BETS_CLEARED"; payload: BetsClearedPayload; timestamp: number }
@@ -180,12 +190,14 @@ export type ClientMessage =
     }
   | { type: "REMOVE_BET"; payload: { betIndex: number } }
   | { type: "CLEAR_BETS" }
+  | { type: "LOCK_BETS" }
   | { type: "PING" };
 
 export interface UseRouletteWebSocketOptions {
   onRoomState?: (payload: RoomStatePayload) => void;
   onPlayerJoined?: (payload: PlayerJoinedPayload) => void;
   onPlayerLeft?: (payload: PlayerLeftPayload) => void;
+  onPlayerLocked?: (payload: PlayerLockedPayload) => void;
   onBetPlaced?: (payload: BetPlacedPayload) => void;
   onBetRemoved?: (payload: BetRemovedPayload) => void;
   onBetsCleared?: (payload: BetsClearedPayload) => void;
@@ -210,6 +222,7 @@ export interface UseRouletteWebSocketReturn {
   }) => void;
   removeBet: (betIndex: number) => void;
   clearBets: () => void;
+  lockBets: () => void;
   joinRoom: (roomId?: string) => void;
   leaveRoom: () => void;
 }
@@ -226,7 +239,7 @@ const MAX_RECONNECT_DELAY = 30000;
 const PING_INTERVAL = 30000;
 
 export function useRouletteWebSocket(
-  options: UseRouletteWebSocketOptions = {}
+  options: UseRouletteWebSocketOptions = {},
 ): UseRouletteWebSocketReturn {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -275,6 +288,9 @@ export function useRouletteWebSocket(
           break;
         case "PLAYER_LEFT":
           opts.onPlayerLeft?.(message.payload);
+          break;
+        case "PLAYER_LOCKED":
+          opts.onPlayerLocked?.(message.payload);
           break;
         case "BET_PLACED":
           opts.onBetPlaced?.(message.payload);
@@ -352,8 +368,10 @@ export function useRouletteWebSocket(
 
     ws.onmessage = handleMessage;
 
-    ws.onclose = () => {
-      console.log("WebSocket closed");
+    ws.onclose = (event) => {
+      console.log(
+        `WebSocket closed: code=${event.code}, reason=${event.reason}, wasClean=${event.wasClean}`,
+      );
       setIsConnected(false);
       optionsRef.current.onConnectionChange?.(false);
       clearTimers();
@@ -368,14 +386,22 @@ export function useRouletteWebSocket(
           // Exponential backoff
           reconnectDelayRef.current = Math.min(
             reconnectDelayRef.current * 2,
-            MAX_RECONNECT_DELAY
+            MAX_RECONNECT_DELAY,
           );
         }, reconnectDelayRef.current);
       }
     };
 
-    ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
+    ws.onerror = (event) => {
+      console.error("WebSocket error - Event:", event);
+      if (wsRef.current) {
+        console.error(
+          "WebSocket error - State:",
+          wsRef.current.readyState,
+          "URL:",
+          wsRef.current.url,
+        );
+      }
     };
   }, [handleMessage, sendMessage, clearTimers]);
 
@@ -406,7 +432,7 @@ export function useRouletteWebSocket(
         payload: bet,
       });
     },
-    [sendMessage]
+    [sendMessage],
   );
 
   const removeBet = useCallback(
@@ -416,11 +442,15 @@ export function useRouletteWebSocket(
         payload: { betIndex },
       });
     },
-    [sendMessage]
+    [sendMessage],
   );
 
   const clearBets = useCallback(() => {
     sendMessage({ type: "CLEAR_BETS" });
+  }, [sendMessage]);
+
+  const lockBets = useCallback(() => {
+    sendMessage({ type: "LOCK_BETS" });
   }, [sendMessage]);
 
   const joinRoom = useCallback(
@@ -430,7 +460,7 @@ export function useRouletteWebSocket(
         payload: roomId ? { roomId } : undefined,
       });
     },
-    [sendMessage]
+    [sendMessage],
   );
 
   const leaveRoom = useCallback(() => {
@@ -451,6 +481,7 @@ export function useRouletteWebSocket(
     placeBet,
     removeBet,
     clearBets,
+    lockBets,
     joinRoom,
     leaveRoom,
   };

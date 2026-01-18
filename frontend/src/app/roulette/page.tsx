@@ -470,6 +470,7 @@ export default function RoulettePage() {
 
   const setBetAmount = (amount: number | string) => {
     if (amount === "All-in") {
+      console.log(balance);
       _setBetAmount(balance);
     } else {
       const parsedAmount =
