@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
 import routes from './routes';
 import { pricePublisher } from './events/publisher';
 import { priceConsumer } from './events/consumer';
@@ -8,11 +10,39 @@ import { priceScheduler } from './services/scheduler';
 
 dotenv.config();
 
+// Swagger configuration
+const swaggerOptions: swaggerJsdoc.Options = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'CoinMarketCap Service API',
+      description: 'Cryptocurrency price service for CoinCoin Casino - provides real-time prices and conversion rates',
+      version: '1.0.0',
+    },
+    servers: [
+      {
+        url: 'http://localhost/api/prices',
+        description: 'Development server (via NGINX)',
+      },
+      {
+        url: 'http://localhost:8007/prices',
+        description: 'Direct access',
+      },
+    ],
+  },
+  apis: ['./src/routes/*.ts'],
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+
 const app = express();
 const PORT = process.env.PORT || 8007;
 
 app.use(cors());
 app.use(express.json());
+
+// Swagger documentation (path matches NGINX route)
+app.use('/api/prices/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use('/prices', routes);
 
