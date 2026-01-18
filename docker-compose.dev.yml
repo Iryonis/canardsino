@@ -213,30 +213,6 @@ services:
       - casino-network
     command: npm run dev
 
-  # Notifier Service
-  notifier:
-    build:
-      context: ./services/notifier
-      dockerfile: Dockerfile.dev
-    container_name: coincoincasino-notifier-dev
-    ports:
-      - "8006:8006"
-    environment:
-      - NODE_ENV=development
-      - PORT=8006
-      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
-      - REDIS_URL=redis://redis:6379
-    volumes:
-      - ./services/notifier/src:/app/src:cached
-      - ./services/notifier/package.json:/app/package.json:cached
-      - /app/node_modules
-    depends_on:
-      - rabbitmq
-      - redis
-    networks:
-      - casino-network
-    command: npm run dev
-
   # CoinMarketCap Service
   coinmarketcap:
     build:

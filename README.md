@@ -23,7 +23,6 @@ coincoincasino/
     ├── game-engine/            # Moteur de jeu (8003)
     ├── chat/                   # Service de chat SSE (8004)
     ├── stats/                  # Service de statistiques (8005)
-    ├── notifier/               # Service de notifications (8006)
     └── coinmarketcap/          # Service API CMC (8007)
 ```
 
@@ -188,7 +187,6 @@ CMD ["npm", "start"]
 | Game Engine | 8003 | Logique jeux (Roulette) |
 | Chat | 8004 | Feed temps réel (SSE) |
 | Stats | 8005 | Statistiques (SSE) |
-| Notifier | 8006 | Notifications |
 | CoinMarketCap | 8007 | Prix crypto |
 | PostgreSQL | 5432 | Base de données |
 | Redis | 6379 | Cache |

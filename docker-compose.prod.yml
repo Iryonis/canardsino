@@ -268,40 +268,7 @@ services:
         limits:
           cpus: '0.5'
           memory: 512M
-
-  # Notifier Service
-  notifier:
-    build:
-      context: ./services/notifier
-      dockerfile: Dockerfile.prod
-    container_name: coincoincasino-notifier-prod
-    environment:
-      - NODE_ENV=production
-      - PORT=8006
-      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
-      - EMAIL_SERVICE=${EMAIL_SERVICE}
-      - EMAIL_USER=${EMAIL_USER}
-      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - casino-network
-    restart: always
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 256M
-
+          
   # CoinMarketCap Service
   coinmarketcap:
     build:
