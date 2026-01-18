@@ -44,14 +44,14 @@ dev-logs:
 # ==========================================
 
 prod-up:
-	docker compose up -d
+	docker compose -f docker-compose.prod.yml up -d --build
 	@echo "-> Prod server started at http://localhost"
 
 prod-down:
-	docker compose down
+	docker compose -f docker-compose.prod.yml down
 
 prod-logs:
-	docker compose logs -f
+	docker compose -f docker-compose.prod.yml logs -f
 
 # ==========================================
 # MONITORING
