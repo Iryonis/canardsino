@@ -163,6 +163,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8003
+      - GAME_PORT=8003
       - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017/?authSource=admin
       - DB_NAME_GAME_ENGINE=casino_games
       - RANDOM_ORG_SERVICE=http://random-org:8008
