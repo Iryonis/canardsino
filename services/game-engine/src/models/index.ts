@@ -10,3 +10,8 @@ export {
   IGameBet,
   IRouletteDetails,
 } from "./GameHistory";
+export {
+  DuckRaceHistory,
+  IDuckRaceHistory,
+  IDuckRaceParticipant,
+} from "./DuckRaceHistory";

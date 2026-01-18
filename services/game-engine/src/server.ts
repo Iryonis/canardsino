@@ -1,18 +1,69 @@
 import express from "express";
 import { createServer } from "http";
+import { parse } from "url";
 import dotenv from "dotenv";
+import swaggerJsdoc from "swagger-jsdoc";
+import swaggerUi from "swagger-ui-express";
 import rouletteRoutes from "./routes/rouletteRoutes";
 import { Database } from "./config/database";
-import { WebSocketServerHandler } from "./websocket";
+import { WebSocketServerHandler, DuckRaceWebSocketServer } from "./websocket";
 
 dotenv.config();
+
+// Swagger configuration
+const swaggerOptions: swaggerJsdoc.Options = {
+  definition: {
+    openapi: "3.0.0",
+    info: {
+      title: "Game Engine API",
+      description: "Game Engine microservice for CoinCoin Casino - Roulette and Duck Race games",
+      version: "1.0.0",
+    },
+    servers: [
+      {
+        url: "http://localhost/api/games",
+        description: "Development server (via NGINX)",
+      },
+      {
+        url: "http://localhost:8003/games",
+        description: "Direct access",
+      },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
+    },
+  },
+  apis: ["./src/routes/*.ts", "./src/server.ts"],
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.GAME_PORT;
 
-// WebSocket server instance (initialized after DB connection)
+// WebSocket server instances (initialized after DB connection)
 let wsServer: WebSocketServerHandler | null = null;
+let duckRaceWsServer: DuckRaceWebSocketServer | null = null;
+
+// Setup HTTP upgrade handling for multiple WebSocket servers
+httpServer.on("upgrade", (request, socket, head) => {
+  const { pathname } = parse(request.url || "", true);
+
+  if (pathname === "/games/roulette/ws" && wsServer) {
+    wsServer.handleUpgrade(request, socket, head);
+  } else if (pathname === "/games/duck-race/ws" && duckRaceWsServer) {
+    duckRaceWsServer.handleUpgrade(request, socket, head);
+  } else {
+    socket.destroy();
+  }
+});
 
 // Middleware
 app.use(express.json());
@@ -33,6 +84,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Swagger documentation (path matches NGINX route)
+app.use("/api/games/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
 // Health check
 app.get("/health", (req, res) => {
   const db = Database.getInstance();
@@ -49,8 +103,14 @@ app.get("/health", (req, res) => {
       dbName: process.env.MONGO_DB_NAME || "game_engine_db",
     },
     websocket: {
-      enabled: wsServer !== null,
-      connectedClients: wsServer?.getClientCount() || 0,
+      roulette: {
+        enabled: wsServer !== null,
+        connectedClients: wsServer?.getClientCount() || 0,
+      },
+      duckRace: {
+        enabled: duckRaceWsServer !== null,
+        connectedClients: duckRaceWsServer?.getClientCount() || 0,
+      },
     },
     timestamp: new Date().toISOString(),
   };
@@ -68,9 +128,19 @@ app.get("/games", (req, res) => {
     games: [
       {
         id: "roulette",
-        name: "Roulette Européenne",
+        name: "Roulette Europeenne",
         status: "active",
         endpoint: "/games/roulette",
+        multiplayer: true,
+      },
+      {
+        id: "duck-race",
+        name: "Course de Canards",
+        status: "active",
+        endpoint: "/games/duck-race",
+        multiplayer: true,
+        minPlayers: 2,
+        maxPlayers: 5,
       },
     ],
   });
@@ -103,13 +173,15 @@ async function startServer() {
     const db = Database.getInstance();
     await db.connect();
 
-    // Initialize WebSocket server
+    // Initialize WebSocket servers
     wsServer = new WebSocketServerHandler(httpServer);
+    duckRaceWsServer = new DuckRaceWebSocketServer(httpServer);
 
     httpServer.listen(PORT, () => {
       console.log(`🎰 Game Engine service listening on port ${PORT}`);
       console.log(`Available games:`);
       console.log(`  🎡 Roulette - /games/roulette`);
+      console.log(`  🦆 Duck Race - /games/duck-race`);
       console.log(`\nHTTP Routes:`);
       console.log(`  GET    /games                          - List all games`);
       console.log(
@@ -125,6 +197,7 @@ async function startServer() {
       console.log(`  DELETE /games/roulette/bets/:userId    - Cancel bets`);
       console.log(`\nWebSocket:`);
       console.log(`  WS     /games/roulette/ws              - Multiplayer roulette`);
+      console.log(`  WS     /games/duck-race/ws             - Duck race multiplayer`);
     });
   } catch (error) {
     console.error("❌ Failed to start server:", error);
@@ -139,9 +212,12 @@ async function gracefulShutdown(signal: string): Promise<void> {
   console.log(`\n⚠️ Received ${signal}, shutting down gracefully...`);
 
   try {
-    // Cleanup WebSocket server
+    // Cleanup WebSocket servers
     if (wsServer) {
       wsServer.cleanup();
+    }
+    if (duckRaceWsServer) {
+      duckRaceWsServer.cleanup();
     }
 
     const db = Database.getInstance();

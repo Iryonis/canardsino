@@ -70,3 +70,95 @@
     outline-offset: 2px;
   }
 }
+
+/* Duck Race Animations */
+@keyframes waddle {
+  0%,
+  100% {
+    transform: rotate(-5deg) translateY(0);
+  }
+  25% {
+    transform: rotate(5deg) translateY(-3px);
+  }
+  50% {
+    transform: rotate(-5deg) translateY(0);
+  }
+  75% {
+    transform: rotate(5deg) translateY(-3px);
+  }
+}
+
+@keyframes wing-flap {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.8);
+  }
+}
+
+@keyframes feet-walk {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(15deg);
+  }
+  75% {
+    transform: rotate(-15deg);
+  }
+}
+
+@keyframes tail-wag {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(10deg);
+  }
+}
+
+.animate-waddle {
+  animation: waddle 0.4s ease-in-out infinite;
+}
+
+.animate-wing-flap {
+  animation: wing-flap 0.3s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.animate-feet {
+  animation: feet-walk 0.3s ease-in-out infinite;
+  transform-origin: top;
+}
+
+.animate-tail-wag {
+  animation: tail-wag 0.5s ease-in-out infinite;
+  transform-origin: right center;
+}
+@layer components {
+  .btn {
+    @apply px-4 py-2 font-medium rounded-lg transition-all duration-300 shadow-lg active:shadow-none active:scale-95;
+  }
+  .btn-green {
+    @apply bg-gradient-to-r from-green-400 to-green-700 hover:from-green-500 hover:to-green-400 text-white hover:shadow-green-600/50;
+  }
+  .btn-blue {
+    @apply bg-gradient-to-r from-blue to-blue-light hover:from-blue-light hover:to-blue-lightest text-white hover:shadow-blue-light/50;
+  }
+  .btn-red {
+    @apply bg-gradient-to-r from-red-400 to-red-700 hover:from-red-500 hover:to-red-400 text-white hover:shadow-red-600/50;
+  }
+}
+
+@layer utilities {
+  .trapezoid_left {
+    clip-path: polygon(0 20%, 100% 0, 100% 100%, 0 80%);
+  }
+  .trapezoid_right {
+    clip-path: polygon(0 0, 100% 20%, 100% 80%, 0 100%);
+  }
+}

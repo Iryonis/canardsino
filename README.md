@@ -326,11 +326,22 @@ docker exec coincoincasino-nginx nginx -t
 docker exec coincoincasino-nginx nginx -s reload
 ```
 
-## 📖 Documentation
+## 📖 Documentation API (Swagger)
 
-- **OpenAPI Spec** : `casino-api-openapi.yaml`
-- **Import dans Swagger** : https://editor.swagger.io/
-- **Architecture** : Voir diagrammes ci-dessus
+Chaque microservice expose sa documentation OpenAPI via Swagger UI :
+
+| Service | URL Documentation |
+|---------|-------------------|
+| Auth | http://localhost/api/auth/docs |
+| Wallet | http://localhost/api/wallet/docs |
+| Game Engine | http://localhost/api/games/docs |
+| Chat | http://localhost/api/chat/docs |
+| Stats | http://localhost/api/stats/docs |
+| Prices (CMC) | http://localhost/api/prices/docs |
+
+**Fichier OpenAPI statique** : `docs/openapi.yaml`
+
+**Architecture** : Voir diagrammes ci-dessus
 
 ## 📞 Support
 
