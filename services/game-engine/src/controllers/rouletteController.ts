@@ -81,6 +81,15 @@ async function updateWalletBalance(
 const BIG_WIN_MULTIPLIER = 10;
 
 /**
+ * Type definition for random-org service response
+ */
+interface RandomOrgResponse {
+  number: number;
+  timestamp: number;
+  source: string;
+}
+
+/**
  * Extract user info from JWT token in request headers
  */
 function getUserFromToken(
@@ -246,7 +255,7 @@ export async function spin(req: Request, res: Response) {
         throw new Error(`Random service error: ${randomResponse.status}`);
       }
 
-      const randomData = await randomResponse.json();
+      const randomData = await randomResponse.json() as RandomOrgResponse;
       winningNumber = randomData.number;
       source = randomData.source;
 
