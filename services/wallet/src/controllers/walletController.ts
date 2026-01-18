@@ -84,7 +84,7 @@ async function fetchCryptoPrice(symbol: string): Promise<number | null> {
       console.error(`Failed to fetch price for ${symbol}: ${response.status}`);
       return null;
     }
-    const data = await response.json();
+    const data = await response.json() as { data?: { price?: number } };
     return data.data?.price ?? null;
   } catch (error) {
     console.error(`Error fetching price for ${symbol}:`, error);

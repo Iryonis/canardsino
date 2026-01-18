@@ -49,7 +49,7 @@ async function getWalletBalance(userId: string): Promise<number> {
       return 0;
     }
 
-    const data = await response.json();
+    const data = await response.json() as { balance: number };
     return data.balance;
   } catch (error) {
     console.error("Error calling wallet service:", error);
@@ -79,11 +79,11 @@ async function updateWalletBalance(
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "Failed to update balance");
+      const errorData = await response.json() as { error?: string };
+      throw new Error(errorData.error || "Failed to update balance");
     }
 
-    return await response.json();
+    return await response.json() as { success: boolean; newBalance: number };
   } catch (error) {
     console.error("Error updating wallet balance:", error);
     throw error;

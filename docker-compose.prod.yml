@@ -75,7 +75,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8001
-      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017/?authSource=admin
       - MONGO_DB_NAME=casino_auth
       - JWT_SECRET=${JWT_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
@@ -116,9 +116,12 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8002
-      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017/?authSource=admin
       - MONGO_DB_NAME=casino_wallet
+      - JWT_SECRET=${JWT_SECRET}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - POLYGON_RPC_URL=${POLYGON_RPC_URL}
+      - HOT_WALLET_ADDRESS=${HOT_WALLET_ADDRESS}
       - CCC_TOKEN_ADDRESS=${CCC_TOKEN_ADDRESS}
       - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
@@ -160,11 +163,16 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8003
-      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
-      - MONGO_DB_NAME=casino_games
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017/?authSource=admin
+      - DB_NAME_GAME_ENGINE=casino_games
+      - RANDOM_ORG_SERVICE=http://random-org:8008
       - RANDOM_ORG_API_KEY=${RANDOM_ORG_API_KEY}
       - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - WALLET_SERVICE_URL=http://wallet:8002
+      - CHAT_SERVICE_URL=http://chat:8004
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -200,8 +208,10 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8004
-      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
+      - CHAT_PORT=8004
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017/?authSource=admin
       - MONGO_DB_NAME=casino_chat
+      - JWT_SECRET=${JWT_SECRET}
       - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
     depends_on:
@@ -239,8 +249,9 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8005
-      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017/?authSource=admin
       - MONGO_DB_NAME=casino_stats
+      - JWT_SECRET=${JWT_SECRET}
       - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
     depends_on:
@@ -280,6 +291,7 @@ services:
       - PORT=8007
       - CMC_API_KEY=${CMC_API_KEY}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
       - CACHE_TTL=300
     depends_on:
       redis:
