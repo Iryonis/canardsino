@@ -2,11 +2,47 @@ import express from "express";
 import { createServer } from "http";
 import { parse } from "url";
 import dotenv from "dotenv";
+import swaggerJsdoc from "swagger-jsdoc";
+import swaggerUi from "swagger-ui-express";
 import rouletteRoutes from "./routes/rouletteRoutes";
 import { Database } from "./config/database";
 import { WebSocketServerHandler, DuckRaceWebSocketServer } from "./websocket";
 
 dotenv.config();
+
+// Swagger configuration
+const swaggerOptions: swaggerJsdoc.Options = {
+  definition: {
+    openapi: "3.0.0",
+    info: {
+      title: "Game Engine API",
+      description: "Game Engine microservice for CoinCoin Casino - Roulette and Duck Race games",
+      version: "1.0.0",
+    },
+    servers: [
+      {
+        url: "http://localhost/api/games",
+        description: "Development server (via NGINX)",
+      },
+      {
+        url: "http://localhost:8003/games",
+        description: "Direct access",
+      },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
+    },
+  },
+  apis: ["./src/routes/*.ts", "./src/server.ts"],
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 const app = express();
 const httpServer = createServer(app);
@@ -47,6 +83,9 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// Swagger documentation
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Health check
 app.get("/health", (req, res) => {

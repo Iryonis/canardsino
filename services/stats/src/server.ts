@@ -2,12 +2,48 @@
 import express from "express";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
+import swaggerJsdoc from "swagger-jsdoc";
+import swaggerUi from "swagger-ui-express";
 import statsRoutes from "./routes/statsRoutes";
 import { eventConsumer } from "./events/consumer";
 import { priceConsumer } from "./events/priceConsumer";
 import { redisCache } from "./cache/redisClient";
 
 dotenv.config();
+
+// Swagger configuration
+const swaggerOptions: swaggerJsdoc.Options = {
+  definition: {
+    openapi: "3.0.0",
+    info: {
+      title: "Stats Service API",
+      description: "Stats microservice for CoinCoin Casino - Real-time statistics via SSE",
+      version: "1.0.0",
+    },
+    servers: [
+      {
+        url: "http://localhost/api/stats",
+        description: "Development server (via NGINX)",
+      },
+      {
+        url: "http://localhost:8005/stats",
+        description: "Direct access",
+      },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
+    },
+  },
+  apis: ["./src/routes/*.ts"],
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 const app = express();
 const PORT = process.env.PORT || 8005;
@@ -29,6 +65,9 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Swagger documentation
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 export function healthCheck(req: express.Request, res: express.Response) {
   res.json({
