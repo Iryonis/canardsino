@@ -43,6 +43,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+      args:
+        - NEXT_PUBLIC_REOWN_PROJECT_ID=${NEXT_PUBLIC_REOWN_PROJECT_ID}
+        - NEXT_PUBLIC_USDC_ADDRESS=${NEXT_PUBLIC_USDC_ADDRESS}
+        - NEXT_PUBLIC_HOT_WALLET_ADDRESS=${NEXT_PUBLIC_HOT_WALLET_ADDRESS}
     container_name: coincoincasino-frontend-prod
     environment:
       - NODE_ENV=production
@@ -164,7 +168,7 @@ services:
       - NODE_ENV=production
       - PORT=8003
       - GAME_PORT=8003
-      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017/?authSource=admin
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017?authSource=admin
       - DB_NAME_GAME_ENGINE=casino_games
       - RANDOM_ORG_SERVICE=http://random-org:8008
       - RANDOM_ORG_API_KEY=${RANDOM_ORG_API_KEY}
@@ -210,7 +214,7 @@ services:
       - NODE_ENV=production
       - PORT=8004
       - CHAT_PORT=8004
-      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017/?authSource=admin
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017?authSource=admin
       - MONGO_DB_NAME=casino_chat
       - JWT_SECRET=${JWT_SECRET}
       - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672
@@ -250,7 +254,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8005
-      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017/?authSource=admin
+      - MONGO_URL=mongodb://casino_admin:${MONGO_PASSWORD}@mongodb:27017?authSource=admin
       - MONGO_DB_NAME=casino_stats
       - JWT_SECRET=${JWT_SECRET}
       - RABBITMQ_URL=amqp://casino_rabbit:${RABBITMQ_PASSWORD}@rabbitmq:5672

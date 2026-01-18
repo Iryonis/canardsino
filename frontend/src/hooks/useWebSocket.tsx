@@ -83,8 +83,11 @@ export function useWebSocket({
    */
   const createWebSocketConnection = useCallback(
     (token: string, handleMessage: (event: MessageEvent) => void) => {
+      // Build WebSocket URL based on current location (works in dev and prod)
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const host = window.location.host;
       const CHAT_WS_URL =
-        process.env.NEXT_PUBLIC_CHAT_WS_URL || "ws://localhost:8004";
+        process.env.NEXT_PUBLIC_CHAT_WS_URL || `${protocol}//${host}/api/chat/ws`;
       const ws = new WebSocket(`${CHAT_WS_URL}?token=${token}`);
 
       ws.onopen = () => {
