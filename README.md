@@ -87,6 +87,9 @@ RABBITMQ_PASSWORD=your_rabbitmq_password
 POLYGON_RPC_URL=https://polygon-rpc.com
 HOT_WALLET_PRIVATE_KEY=0x...
 
+#Internal API Key for inter-service communication
+INTERNAL_API_KEY=your_internal_service_key
+
 # APIs externes
 CMC_API_KEY=your_coinmarketcap_key
 RANDOM_ORG_API_KEY=your_random_org_key
