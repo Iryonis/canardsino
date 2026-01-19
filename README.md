@@ -103,14 +103,8 @@ make prod-up
 #ou
 docker compose -f docker-compose.prod.yml up -d --build
 
-
 # Voir les logs
 docker compose -f docker-compose.prod.yml logs -f
-
-# Arreter l'application
-make prod-down
-#ou
-docker compose -f docker-compose.prod.yml down
 
 # En mode developpement
 make dev-up
@@ -120,10 +114,7 @@ docker compose -f docker-compose.dev.yml up -d --build
 # Voir les logs
 docker compose -f docker-compose.dev.yml logs -f
 
-# Arreter l'application
-make dev-down
-#ou
-docker compose -f docker-compose.dev.yml down
+
 ```
 
 ### 3. Acceder a l'application
@@ -136,10 +127,15 @@ docker compose -f docker-compose.dev.yml down
 ### 4. Arreter l'application
 
 ```bash
-docker-compose down
+# Arreter l'application en mode production
+make prod-down
+#ou
+docker compose -f docker-compose.prod.yml down
 
-# Supprimer aussi les donnees
-docker-compose down -v
+# Arreter l'application en mode dev
+make dev-down
+#ou
+docker compose -f docker-compose.dev.yml down
 ```
 
 ## Documentation API (Swagger)
