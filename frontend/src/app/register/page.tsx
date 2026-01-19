@@ -1,33 +1,33 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { useAuth } from '../../hooks/useAuth';
-import { ValidationError, NetworkError, ApiError } from '../../lib/apiErrors';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useAuth } from "../../hooks/useAuth";
+import { ValidationError, NetworkError, ApiError } from "../../lib/apiErrors";
 
 export default function RegisterPage() {
   const router = useRouter();
   const { register } = useAuth();
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
     // Validation
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError("Passwords do not match");
       return;
     }
 
     if (password.length < 8) {
-      setError('Password must be at least 8 characters');
+      setError("Password must be at least 8 characters");
       return;
     }
 
@@ -35,16 +35,16 @@ export default function RegisterPage() {
 
     try {
       await register({ email, username, password });
-      router.push('/');
+      router.push("/");
     } catch (err: unknown) {
       if (err instanceof ValidationError) {
-        setError('Invalid registration data. Please check your inputs');
+        setError("Invalid registration data. Please check your inputs");
       } else if (err instanceof NetworkError) {
-        setError('Network error. Please check your connection');
+        setError("Network error. Please check your connection");
       } else if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError('Failed to register');
+        setError("Failed to register");
       }
     } finally {
       setIsLoading(false);
@@ -64,7 +64,9 @@ export default function RegisterPage() {
 
         {/* Register Card */}
         <div className="bg-blue-dark rounded-2xl shadow-2xl p-8 border border-blue">
-          <h2 className="text-2xl font-bold text-blue-lightest mb-6 text-center">Create Account</h2>
+          <h2 className="text-2xl font-bold text-blue-lightest mb-6 text-center">
+            Create Account
+          </h2>
 
           {error && (
             <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-sm">
@@ -75,7 +77,10 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email Input */}
             <div>
-              <label htmlFor="email" className="block text-blue-light text-sm font-medium mb-2">
+              <label
+                htmlFor="email"
+                className="block text-blue-light text-sm font-medium mb-2"
+              >
                 Email Address
               </label>
               <input
@@ -91,7 +96,10 @@ export default function RegisterPage() {
 
             {/* Username Input */}
             <div>
-              <label htmlFor="username" className="block text-blue-light text-sm font-medium mb-2">
+              <label
+                htmlFor="username"
+                className="block text-blue-light text-sm font-medium mb-2"
+              >
                 Username
               </label>
               <input
@@ -108,7 +116,10 @@ export default function RegisterPage() {
 
             {/* Password Input */}
             <div>
-              <label htmlFor="password" className="block text-blue-light text-sm font-medium mb-2">
+              <label
+                htmlFor="password"
+                className="block text-blue-light text-sm font-medium mb-2"
+              >
                 Password
               </label>
               <input
@@ -125,7 +136,10 @@ export default function RegisterPage() {
 
             {/* Confirm Password Input */}
             <div>
-              <label htmlFor="confirmPassword" className="block text-blue-light text-sm font-medium mb-2">
+              <label
+                htmlFor="confirmPassword"
+                className="block text-blue-light text-sm font-medium mb-2"
+              >
                 Confirm Password
               </label>
               <input
@@ -145,15 +159,18 @@ export default function RegisterPage() {
               disabled={isLoading}
               className="w-full py-3 px-4 bg-gradient-to-r from-blue to-blue-light hover:from-blue-light hover:to-blue-lightest text-blue-darkest font-bold rounded-lg shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed mt-6"
             >
-              {isLoading ? 'Creating Account...' : 'Register'}
+              {isLoading ? "Creating Account..." : "Register"}
             </button>
           </form>
 
           {/* Login Link */}
           <div className="mt-6 text-center">
             <p className="text-blue-light text-sm">
-              Already have an account?{' '}
-              <Link href="/login" className="text-blue-light hover:text-blue-lightest font-medium transition">
+              Already have an account?{" "}
+              <Link
+                href="/login"
+                className="text-blue-light font-bold hover:underline hover:text-blue-lightest transition"
+              >
                 Login here
               </Link>
             </p>

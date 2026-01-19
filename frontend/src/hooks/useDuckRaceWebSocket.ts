@@ -426,7 +426,7 @@ export function useDuckRaceWebSocket(
 
         ws.onmessage = handleMessage;
 
-        ws.onclose = (event) => {
+        ws.onclose = (event: CloseEvent) => {
           console.log("Duck Race WebSocket closed:", event.code, event.reason);
           setIsConnected(false);
           optionsRef.current.onConnectionChange?.(false);
@@ -446,8 +446,8 @@ export function useDuckRaceWebSocket(
           }
         };
 
-        ws.onerror = (error) => {
-          console.error("Duck Race WebSocket error:", error);
+        ws.onerror = () => {
+          // WebSocket errors are handled in onclose
         };
       } catch (err) {
         console.error("Duck Race WebSocket creation error:", err);

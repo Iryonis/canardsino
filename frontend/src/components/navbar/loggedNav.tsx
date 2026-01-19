@@ -1,11 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../../hooks/useAuth";
 import { BalanceUSD } from "../prices/BalanceUSD";
 
 export const LoggedNav = ({ balance }: { balance: number }) => {
+  const router = useRouter();
   const { logout, user } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    router.push("/");
+  };
 
   return (
     <div className="flex items-center gap-4">
@@ -35,7 +42,7 @@ export const LoggedNav = ({ balance }: { balance: number }) => {
         My Stats
       </Link>
       <hr className="border border-gray-300 my-2" />
-      <button onClick={logout} className="btn btn-red">
+      <button onClick={handleLogout} className="btn btn-red">
         Logout
       </button>
     </div>

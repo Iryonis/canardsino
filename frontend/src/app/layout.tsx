@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import "./globals.css";
 import { AuthProvider } from "@/hooks/useAuth";
 import { CryptoPricesProvider } from "@/hooks/useCryptoPrices";
-import { FloatingChat } from "@/components";
+import { ChatProvider } from "@/components/ChatProvider";
 import Web3Provider from "@/context/Web3Provider";
 
 const geistSans = Geist({
@@ -39,7 +39,7 @@ export default async function RootLayout({
           <AuthProvider>
             <CryptoPricesProvider>
               {children}
-              <FloatingChat />
+              <ChatProvider />
             </CryptoPricesProvider>
           </AuthProvider>
         </Web3Provider>

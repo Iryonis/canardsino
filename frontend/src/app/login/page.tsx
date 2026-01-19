@@ -4,7 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../hooks/useAuth";
-import { ApiError, AuthError, ValidationError, NetworkError } from "../../lib/apiErrors";
+import {
+  ApiError,
+  AuthError,
+  ValidationError,
+  NetworkError,
+} from "../../lib/apiErrors";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,17 +27,17 @@ export default function LoginPage() {
     try {
       await login({ email, password });
       router.push("/");
-        } catch (err: unknown) {
+    } catch (err: unknown) {
       if (err instanceof AuthError) {
-        setError('Invalid email or password');
+        setError("Invalid email or password");
       } else if (err instanceof ValidationError) {
-        setError('Please check your input');
+        setError("Please check your input");
       } else if (err instanceof NetworkError) {
-        setError('Network error. Please check your connection');
+        setError("Network error. Please check your connection");
       } else if (err instanceof ApiError) {
         setError(err.message);
       } else {
-        setError('An unexpected error occurred');
+        setError("An unexpected error occurred");
       }
     } finally {
       setIsLoading(false);
@@ -114,10 +119,10 @@ export default function LoginPage() {
           {/* Register Link */}
           <div className="mt-6 text-center">
             <p className="text-blue-light text-sm">
-               Don&apos;t have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link
                 href="/register"
-                className="text-blue-light hover:text-blue-lightest font-medium transition"
+                className="text-blue-light font-bold hover:underline hover:text-blue-lightest transition"
               >
                 Register here
               </Link>

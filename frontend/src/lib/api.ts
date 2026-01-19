@@ -54,7 +54,7 @@ export const tokenStorage = {
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {},
-  skipAuthRetry = false
+  skipAuthRetry = false,
 ): Promise<T> {
   const url = `${API_URL}${endpoint}`;
 
@@ -107,7 +107,7 @@ async function fetchApi<T>(
           throw new ApiError(
             error.error || "Request failed",
             response.status,
-            `HTTP_${response.status}`
+            `HTTP_${response.status}`,
           );
       }
     }
@@ -121,7 +121,7 @@ async function fetchApi<T>(
 
     // Otherwise it's a network error
     throw new NetworkError(
-      err instanceof Error ? err.message : "Network error occurred"
+      err instanceof Error ? err.message : "Network error occurred",
     );
   }
 }
@@ -133,7 +133,12 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify(data),
     });
-    tokenManager.setTokens(response.tokens || { accessToken: response.token, refreshToken: response.refreshToken });
+    tokenManager.setTokens(
+      response.tokens || {
+        accessToken: response.token,
+        refreshToken: response.refreshToken,
+      },
+    );
     return response;
   },
 
@@ -142,7 +147,12 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify(data),
     });
-    tokenManager.setTokens(response.tokens || { accessToken: response.token, refreshToken: response.refreshToken });
+    tokenManager.setTokens(
+      response.tokens || {
+        accessToken: response.token,
+        refreshToken: response.refreshToken,
+      },
+    );
     return response;
   },
 

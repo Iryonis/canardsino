@@ -64,7 +64,7 @@ export function useWebSocket({
         setTimeout(() => setIsConnected(true), 0);
       }
     },
-    []
+    [],
   );
 
   /**
@@ -87,30 +87,29 @@ export function useWebSocket({
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const host = window.location.host;
       const CHAT_WS_URL =
-        process.env.NEXT_PUBLIC_CHAT_WS_URL || `${protocol}//${host}/api/chat/ws`;
+        process.env.NEXT_PUBLIC_CHAT_WS_URL ||
+        `${protocol}//${host}/api/chat/ws`;
       const ws = new WebSocket(`${CHAT_WS_URL}?token=${token}`);
 
       ws.onopen = () => {
-        console.log("✅ Connected to chat");
         setIsConnected(true);
       };
 
       ws.onmessage = handleMessage;
 
       ws.onclose = (event) => {
-        console.log("❌ Disconnected from chat", event.code, event.reason);
         resetConnectionState();
       };
 
-      ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
+      ws.onerror = () => {
+        // WebSocket errors are handled in onclose
         setIsConnected(false);
       };
 
       wsRef.current = ws;
       globalWsInstance = ws;
     },
-    [resetConnectionState]
+    [resetConnectionState],
   );
 
   /**
@@ -118,7 +117,6 @@ export function useWebSocket({
    */
   const closeConnection = useCallback(() => {
     if (globalWsInstance?.readyState === WebSocket.OPEN) {
-      console.log("🔌 Closing WebSocket connection on logout");
       globalWsInstance.close(1000, "User logged out");
       globalWsInstance = null;
     }
@@ -129,9 +127,10 @@ export function useWebSocket({
   useEffect(() => {
     if (!isAuthenticated && !isInitialMount.current) {
       closeConnection();
+      resetConnectionState(); // ← Ajoute reset
     }
     isInitialMount.current = false;
-  }, [isAuthenticated, closeConnection]);
+  }, [isAuthenticated, closeConnection, resetConnectionState]);
 
   // Connect to WebSocket
   useEffect(() => {
@@ -146,21 +145,23 @@ export function useWebSocket({
 
     const handleMessage = createMessageHandler();
 
-    // Reuse existing connection
+    // Si on a un username maintenant et la connexion existante est vieille, reset
     if (globalWsInstance && globalWsInstance.readyState === WebSocket.OPEN) {
       setupExistingConnection(handleMessage);
       return;
     }
 
-    // Don't create a new connection if one already exists
+    // Reset et crée nouvelle connexion si le username a changé
     if (globalWsInstance) {
-      return;
+      globalWsInstance.close();
+      globalWsInstance = null;
+      wsRef.current = null;
     }
 
     createWebSocketConnection(token, handleMessage);
 
     return () => {
-      console.log("🔄 Component cleanup (connexion maintenue)");
+      // Cleanup on component unmount
     };
   }, [
     isAuthenticated,
@@ -175,7 +176,7 @@ export function useWebSocket({
       if (!message.trim() || !wsRef.current || !isConnected) return;
       wsRef.current.send(message);
     },
-    [isConnected]
+    [isConnected],
   );
 
   return {

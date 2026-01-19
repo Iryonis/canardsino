@@ -3,22 +3,12 @@
 import Link from "next/link";
 import { useAuth } from "../hooks/useAuth";
 import { Navbar } from "../components/navbar/navbar";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getWalletBalance } from "@/lib/gameApi";
 
 export default function Home() {
   const { user, isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
   const [balance, setBalance] = useState(0);
-
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (!isLoading && (!isAuthenticated || !user)) {
-      console.log("🔒 Not authenticated, redirecting to login...");
-      router.replace("/login");
-    }
-  }, [isAuthenticated, isLoading, user, router]);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -39,7 +29,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-blue-darkest">
       {/* Header/Navbar */}
-      <Navbar balance={balance} currentPage="" />
+      <Navbar balance={balance || 0} currentPage="" />
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-16">
@@ -103,10 +93,10 @@ export default function Home() {
                     Classic casino game with fair odds
                   </p>
                 </div>
-                <div className="bg-blue-dark rounded-xl p-6 border border-blue border-yellow-500/50">
+                <div className="bg-blue-dark rounded-xl p-6 border border-blue border-blue">
                   <div className="text-4xl mb-3">🦆</div>
-                  <h3 className="text-xl font-bold text-yellow-400 mb-2">
-                    Duck Race
+                  <h3 className="text-xl font-bold text-blue-lightest mb-2">
+                    Duck Race (Beta)
                   </h3>
                   <p className="text-blue-light">
                     Multiplayer racing - winner takes all!
