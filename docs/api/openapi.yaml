@@ -5,7 +5,7 @@ info:
     API complète pour la plateforme de casino en ligne CoinCoin.
     
     ## Architecture
-    - **Microservices** : Auth, Wallet, Game Engine, Chat, Stats, Prices
+    - **Microservices** : Auth, Wallet, Game Engine, Chat, Stats, Prices, Random
     - **Message Bus** : RabbitMQ pour la communication inter-services
     - **Blockchain** : Polygon pour ETH/USDC et token CCC
     
@@ -29,24 +29,30 @@ info:
     email: support@coincoincasino.com
 
 servers:
-  - url: http://localhost
+  - url: http://localhost/api
     description: Development (via NGINX)
 
 tags:
-  - name: Auth
+  - name: Authentication
     description: Authentification et gestion des utilisateurs
   - name: Wallet
     description: Gestion du portefeuille crypto et CCC
+  - name: Internal
+    description: Routes internes pour communication inter-services
   - name: Roulette
     description: Jeu de la roulette européenne
   - name: Duck Race
     description: Course de canards multijoueur (WebSocket)
   - name: Chat
-    description: Chat en temps réel (WebSocket)
+    description: Chat en temps réel et système de messages
   - name: Stats
-    description: Statistiques et dashboard (SSE)
+    description: Statistiques en temps réel (SSE)
   - name: Prices
-    description: Prix des cryptomonnaies
+    description: Prix des cryptomonnaies via CoinMarketCap
+  - name: Health
+    description: Health checks des services
+  - name : Random
+    description: Service de génération de nombres aléatoires
 
 security:
   - bearerAuth: []
@@ -56,8 +62,9 @@ paths:
   /auth/register:
     post:
       tags:
-        - Auth
-      summary: Créer un nouveau compte utilisateur
+        - Authentication
+      summary: Register a new user
+      description: Create a new user account with email, username, and password
       security: []
       requestBody:
         required: true
@@ -73,23 +80,54 @@ paths:
                 email:
                   type: string
                   format: email
+                  example: user@example.com
                 username:
                   type: string
                   minLength: 3
+                  example: player123
                 password:
                   type: string
                   minLength: 8
+                  format: password
+                  example: securePassword123
       responses:
         '201':
-          description: Compte créé avec succès
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                      username:
+                        type: string
+                      createdAt:
+                        type: string
+                        format: date-time
+                  tokens:
+                    type: object
+                    properties:
+                      accessToken:
+                        type: string
+                      refreshToken:
+                        type: string
+        '400':
+          description: Validation error
         '409':
-          description: Email ou username déjà utilisé
+          description: Email or username already exists
 
   /auth/login:
     post:
       tags:
-        - Auth
-      summary: Se connecter
+        - Authentication
+      summary: Login user
+      description: Authenticate with email and password to receive JWT tokens
       security: []
       requestBody:
         required: true
@@ -103,17 +141,48 @@ paths:
               properties:
                 email:
                   type: string
+                  format: email
+                  example: user@example.com
                 password:
                   type: string
+                  format: password
+                  example: securePassword123
       responses:
         '200':
-          description: Connexion réussie (retourne accessToken et refreshToken)
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                      username:
+                        type: string
+                      createdAt:
+                        type: string
+                        format: date-time
+                  tokens:
+                    type: object
+                    properties:
+                      accessToken:
+                        type: string
+                      refreshToken:
+                        type: string
+        '401':
+          description: Invalid credentials
 
   /auth/refresh:
     post:
       tags:
-        - Auth
-      summary: Rafraîchir le token JWT
+        - Authentication
+      summary: Refresh access token
+      description: Exchange a refresh token for new access and refresh tokens (token rotation)
       security: []
       requestBody:
         required: true
@@ -128,42 +197,113 @@ paths:
                   type: string
       responses:
         '200':
-          description: Token rafraîchi
+          description: Tokens refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+        '401':
+          description: Invalid or expired refresh token
 
   /auth/profile:
     get:
       tags:
-        - Auth
-      summary: Profil utilisateur
+        - Authentication
+      summary: Get user profile
+      description: Retrieve the authenticated user's profile information
       responses:
         '200':
-          description: Profil récupéré
+          description: User profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  email:
+                    type: string
+                  username:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+        '401':
+          description: Not authenticated
 
   # ==================== WALLET SERVICE ====================
   /wallet/deposit-info:
     get:
       tags:
         - Wallet
-      summary: Informations de dépôt
+      summary: Get deposit information
+      description: Get the hot wallet address and supported tokens for deposits (public endpoint)
       security: []
       responses:
         '200':
-          description: Adresse wallet et tokens supportés
+          description: Deposit configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hotWalletAddress:
+                    type: string
+                    example: "0x742d35Cc6634C0532925a3b844Bc9e7595f..."
+                  supportedTokens:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        symbol:
+                          type: string
+                        address:
+                          type: string
+                        decimals:
+                          type: integer
+                  cccPerUSD:
+                    type: integer
+                    example: 1000
+                  network:
+                    type: string
+                    example: "Polygon"
+                  chainId:
+                    type: integer
+                    example: 137
 
   /wallet/balance:
     get:
       tags:
         - Wallet
-      summary: Solde du wallet
+      summary: Get user balance
+      description: Retrieve the authenticated user's CCC balance
       responses:
         '200':
-          description: Solde en CCC
+          description: User balance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balance:
+                    type: number
+                    example: 50000
+                  userId:
+                    type: string
+        '401':
+          description: Not authenticated
 
   /wallet/deposit:
     post:
       tags:
         - Wallet
-      summary: Traiter un dépôt crypto
+      summary: Process crypto deposit
+      description: Verify a blockchain transaction and credit CCC tokens to the user's account
       requestBody:
         required: true
         content:
@@ -176,28 +316,69 @@ paths:
               properties:
                 txHash:
                   type: string
+                  description: Polygon transaction hash
+                  example: "0x123abc..."
                 walletAddress:
                   type: string
+                  description: User's wallet address that sent the deposit
+                  example: "0x742d35Cc..."
                 cryptoSymbol:
                   type: string
+                  description: Cryptocurrency symbol (default ETH)
+                  example: "ETH"
       responses:
         '200':
-          description: Dépôt traité
+          description: Deposit processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  transaction:
+                    type: object
+                  newBalance:
+                    type: number
+        '400':
+          description: Invalid transaction or already processed
 
   /wallet/transactions:
     get:
       tags:
         - Wallet
-      summary: Historique des transactions
+      summary: Get transaction history
+      description: Retrieve the user's transaction history (last 50 transactions)
       responses:
         '200':
-          description: Liste des transactions
+          description: Transaction list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transactions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        type:
+                          type: string
+                          enum: [deposit, withdrawal, bet, win]
+                        amount:
+                          type: number
+                        createdAt:
+                          type: string
+                          format: date-time
 
   /wallet/give:
     post:
       tags:
         - Wallet
       summary: Give tokens (test only)
+      description: Self-credit CCC tokens for testing purposes
       requestBody:
         required: true
         content:
@@ -209,58 +390,200 @@ paths:
               properties:
                 amount:
                   type: integer
+                  minimum: 1
+                  example: 10000
       responses:
         '200':
-          description: Tokens crédités
+          description: Tokens credited
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  amount:
+                    type: integer
+                  newBalance:
+                    type: number
 
-  # ==================== ROULETTE ====================
-  /roulette/config:
+  /wallet/internal/update-balance:
+    post:
+      tags:
+        - Internal
+      summary: Update balance (internal)
+      description: Internal endpoint for game engine to update user balance after bets/wins
+      security:
+        - internalApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+                - amount
+                - type
+              properties:
+                userId:
+                  type: string
+                amount:
+                  type: number
+                  description: Positive for wins, negative for bets
+                type:
+                  type: string
+                  enum: [win, bet]
+      responses:
+        '200':
+          description: Balance updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  newBalance:
+                    type: number
+
+  /wallet/internal/balance/{userId}:
+    get:
+      tags:
+        - Internal
+      summary: Get balance by userId (internal)
+      description: Internal endpoint for game engine to get user balance
+      security:
+        - internalApiKey: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User balance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balance:
+                    type: number
+                  userId:
+                    type: string
+
+  # ==================== GAME ENGINE / ROULETTE ====================
+  /games/roulette/config:
     get:
       tags:
         - Roulette
-      summary: Configuration de la roulette
+      summary: Get roulette configuration
+      description: Get roulette wheel layout, colors, and payout rates
       security: []
       responses:
         '200':
-          description: Configuration (numéros, couleurs, payouts)
+          description: Roulette configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redNumbers:
+                    type: array
+                    items:
+                      type: integer
+                  blackNumbers:
+                    type: array
+                    items:
+                      type: integer
+                  payouts:
+                    type: object
+                    properties:
+                      straight:
+                        type: integer
+                        example: 35
+                      red:
+                        type: integer
+                        example: 1
 
-  /roulette/history:
+  /games/roulette/history:
     get:
       tags:
         - Roulette
-      summary: Historique des parties
+      summary: Get game history
+      description: Get the user's roulette game history with pagination
+      security:
+        - bearerAuth: []
       parameters:
         - name: token
           in: query
+          description: JWT token (alternative to Authorization header)
           schema:
             type: string
         - name: page
           in: query
           schema:
             type: integer
+            default: 1
         - name: limit
           in: query
           schema:
             type: integer
+            default: 20
       responses:
         '200':
-          description: Historique
+          description: Game history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  history:
+                    type: array
+                    items:
+                      type: object
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      totalPages:
+                        type: integer
+                      hasNextPage:
+                        type: boolean
 
-  /roulette/big-wins:
+  /games/roulette/big-wins:
     get:
       tags:
         - Roulette
-      summary: Gros gains récents
+      summary: Get big wins
+      description: Get recent big wins (10x multiplier or higher)
       security: []
       responses:
         '200':
-          description: Big wins (multiplier >= 10x)
+          description: Big wins list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bigWins:
+                    type: array
+                    items:
+                      type: object
+                  count:
+                    type: integer
 
-  /roulette/bets:
+  /games/roulette/bets:
     post:
       tags:
         - Roulette
-      summary: Placer des paris (format raw)
+      summary: Place bets (raw format)
+      description: Place one or more bets on the roulette table using raw bet format
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -274,15 +597,42 @@ paths:
                   type: array
                   items:
                     type: object
+                    properties:
+                      type:
+                        type: string
+                        enum: [straight, split, street, corner, line, column, dozen, red, black, odd, even, high, low]
+                      numbers:
+                        type: array
+                        items:
+                          type: integer
+                      amount:
+                        type: integer
+                        minimum: 2000
       responses:
         '200':
-          description: Paris placés
+          description: Bets placed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  userId:
+                    type: string
+                  totalAmount:
+                    type: number
+        '400':
+          description: Invalid bet or insufficient balance
 
-  /roulette/simple-bets:
+  /games/roulette/simple-bets:
     post:
       tags:
         - Roulette
-      summary: Placer des paris (format simplifié)
+      summary: Place bets (simplified format)
+      description: Place bets using a simplified format compatible with the frontend
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -296,24 +646,66 @@ paths:
                   type: array
                   items:
                     type: object
+                    required:
+                      - type
+                      - amount
+                    properties:
+                      type:
+                        type: string
+                        enum: [straight, red, black, odd, even, high, low, column, dozen]
+                      value:
+                        oneOf:
+                          - type: integer
+                          - type: string
+                      amount:
+                        type: integer
+                        minimum: 2000
       responses:
         '200':
-          description: Paris placés
+          description: Bets placed successfully
 
-  /roulette/spin:
+  /games/roulette/spin:
     post:
       tags:
         - Roulette
-      summary: Lancer la roulette
+      summary: Spin the wheel
+      description: Spin the roulette wheel, calculate results, and credit winnings
+      security:
+        - bearerAuth: []
       responses:
         '200':
-          description: Résultat du spin
+          description: Spin result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  result:
+                    type: object
+                    properties:
+                      totalBet:
+                        type: number
+                      totalWin:
+                        type: number
+                      netResult:
+                        type: number
+                      spinResult:
+                        type: integer
+                        minimum: 0
+                        maximum: 36
+        '400':
+          description: No bets placed
 
-  /roulette/bets/{userId}:
+  /games/roulette/bets/{userId}:
     get:
       tags:
         - Roulette
-      summary: Paris en cours
+      summary: Get current bets
+      description: Get the user's currently placed bets (before spin)
+      security:
+        - bearerAuth: []
       parameters:
         - name: userId
           in: path
@@ -322,11 +714,27 @@ paths:
             type: string
       responses:
         '200':
-          description: Paris actuels
+          description: Current bets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: string
+                  bets:
+                    type: array
+                    items:
+                      type: object
+                  totalAmount:
+                    type: number
     delete:
       tags:
         - Roulette
-      summary: Annuler les paris
+      summary: Cancel bets
+      description: Cancel all current bets for a user
+      security:
+        - bearerAuth: []
       parameters:
         - name: userId
           in: path
@@ -335,34 +743,98 @@ paths:
             type: string
       responses:
         '200':
-          description: Paris annulés
+          description: Bets cancelled
 
-  /roulette/balance:
+  /games/roulette/balance:
     get:
       tags:
         - Roulette
-      summary: Solde via game engine
+      summary: Get balance via game engine
+      description: Get user balance through the game engine (proxied from wallet service)
+      security:
+        - bearerAuth: []
       responses:
         '200':
-          description: Solde
+          description: User balance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balance:
+                    type: number
 
-  /roulette/validate-bet:
+  /games/roulette/validate-bet:
     post:
       tags:
         - Roulette
-      summary: Valider un pari
+      summary: Validate a bet
+      description: Validate a single bet before placing it
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                value:
+                  oneOf:
+                    - type: integer
+                    - type: string
+                amount:
+                  type: integer
       responses:
         '200':
-          description: Validation
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  potentialPayout:
+                    type: number
+                  error:
+                    type: string
 
-  /roulette/calculate-potential-payout:
+  /games/roulette/calculate-potential-payout:
     post:
       tags:
         - Roulette
-      summary: Calculer le gain potentiel
+      summary: Calculate potential payout
+      description: Calculate the realistic maximum potential win for a list of bets
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                simpleBets:
+                  type: array
+                  items:
+                    type: object
       responses:
         '200':
-          description: Gain potentiel
+          description: Payout calculation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalBet:
+                    type: number
+                  maxPotentialWin:
+                    type: number
+                  minPotentialWin:
+                    type: number
 
   # ==================== DUCK RACE (WebSocket) ====================
   /games/duck-race/ws:
@@ -382,11 +854,66 @@ paths:
         - COUNTDOWN_TICK, RACE_STARTED, RACE_UPDATE, RACE_FINISHED
         - BALANCE_UPDATE, WAITING_FOR_PLAYERS
         - ERROR (codes: RACE_CANCELLED, INSUFFICIENT_BALANCE, ROOM_FULL, ROOM_NOT_FOUND, INVALID_PHASE)
+      security: []
       responses:
         '101':
           description: WebSocket établi
 
-  # ==================== CHAT (WebSocket) ====================
+  # ==================== CHAT SERVICE ====================
+  /chat/health:
+    get:
+      tags:
+        - Health
+      summary: Chat service health check
+      security: []
+      responses:
+        '200':
+          description: Service health with client count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  clients:
+                    type: integer
+                    description: Number of connected WebSocket clients
+
+  /chat/system-message:
+    post:
+      tags:
+        - Chat
+      summary: Broadcast system message
+      description: Send a system message to all connected clients (big wins, announcements)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+                  example: "Player123 just won 100,000 CCC!"
+      responses:
+        '200':
+          description: Message broadcasted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: Message is required
+
   /chat/ws:
     get:
       tags:
@@ -398,69 +925,166 @@ paths:
         '101':
           description: WebSocket établi
 
-  # ==================== STATS ====================
+  # ==================== STATS SERVICE ====================
   /stats/health:
     get:
       tags:
-        - Stats
-      summary: Health check
+        - Health
+      summary: Stats service health check
       security: []
       responses:
         '200':
-          description: Service healthy
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: stats
+                  mongodb:
+                    type: boolean
+                  uptime:
+                    type: number
 
   /stats/stream:
     get:
       tags:
         - Stats
-      summary: SSE stream statistiques
-      description: Stream SSE avec initial-stats et heartbeat
+      summary: Real-time stats stream (SSE)
+      description: |
+        Server-Sent Events stream for real-time user statistics.
+
+        **Events:**
+        - `initial-stats`: Sent on connection with user's game statistics
+        - Heartbeat comments every 30 seconds
+
+        **Authentication:** Use `token` query parameter (EventSource doesn't support headers)
       parameters:
         - name: token
           in: query
           required: true
+          description: JWT access token
           schema:
             type: string
       responses:
         '200':
-          description: SSE stream
+          description: SSE stream established
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: |
+                  event: initial-stats
+                  data: {"totalGames": 50, "totalWins": 25, "totalLosses": 25}
+        '401':
+          description: Invalid or missing token
 
-  # ==================== PRICES ====================
+  # ==================== PRICES SERVICE (CoinMarketCap) ====================
   /prices/quotes:
     get:
       tags:
         - Prices
-      summary: Prix de toutes les cryptos
+      summary: Get all crypto prices
+      description: Get current prices for all supported cryptocurrencies (cached)
       security: []
       responses:
         '200':
-          description: Prix (cached)
+          description: Price quotes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    additionalProperties:
+                      type: number
+                    example:
+                      ETH: 3500.42
+                      BTC: 65000.00
+                      USDC: 1.00
+                  cached:
+                    type: boolean
+                  timestamp:
+                    type: string
+                    format: date-time
 
   /prices/supported:
     get:
       tags:
         - Prices
-      summary: Cryptos supportées
+      summary: List supported cryptocurrencies
+      description: Get list of all supported cryptocurrency symbols
       security: []
       responses:
         '200':
-          description: Liste des symbols
+          description: Supported symbols
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: string
+                    example: ["ETH", "BTC", "USDC", "WETH"]
+                  timestamp:
+                    type: string
+                    format: date-time
 
   /prices/deposit-tokens:
     get:
       tags:
         - Prices
-      summary: Tokens de dépôt
+      summary: Get deposit token info
+      description: Get information about tokens accepted for deposits on Polygon
       security: []
       responses:
         '200':
-          description: Tokens acceptés sur Polygon
+          description: Deposit tokens
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        symbol:
+                          type: string
+                        address:
+                          type: string
+                        decimals:
+                          type: integer
+                        name:
+                          type: string
+                  network:
+                    type: string
+                    example: "Polygon"
+                  chainId:
+                    type: integer
+                    example: 137
 
   /prices/convert/{symbol}/{amount}:
     get:
       tags:
         - Prices
-      summary: Convertir crypto en CCC
+      summary: Convert crypto to CCC
+      description: Calculate CCC token amount for a given crypto amount
       security: []
       parameters:
         - name: symbol
@@ -468,20 +1092,51 @@ paths:
           required: true
           schema:
             type: string
+          example: ETH
         - name: amount
           in: path
           required: true
           schema:
             type: number
+          example: 0.1
       responses:
         '200':
-          description: Conversion
+          description: Conversion result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      inputSymbol:
+                        type: string
+                        example: "ETH"
+                      inputAmount:
+                        type: number
+                        example: 0.1
+                      priceUSD:
+                        type: number
+                        example: 3500.42
+                      usdValue:
+                        type: number
+                        example: 350.042
+                      cccAmount:
+                        type: integer
+                        example: 350042
+                      rate:
+                        type: integer
+                        example: 1000
 
   /prices/{symbol}:
     get:
       tags:
         - Prices
-      summary: Prix d'une crypto
+      summary: Get single crypto price
+      description: Get current price for a specific cryptocurrency
       security: []
       parameters:
         - name: symbol
@@ -489,19 +1144,86 @@ paths:
           required: true
           schema:
             type: string
+            enum: [ETH, BTC, USDC, WETH]
+          example: ETH
       responses:
         '200':
-          description: Prix
+          description: Price data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      symbol:
+                        type: string
+                      price:
+                        type: number
+                  cached:
+                    type: boolean
+                  timestamp:
+                    type: string
+                    format: date-time
+        '404':
+          description: Cryptocurrency not supported
 
   /prices/health:
     get:
       tags:
-        - Prices
-      summary: Health check
+        - Health
+      summary: CoinMarketCap service health check
       security: []
       responses:
         '200':
-          description: Service health
+          description: Service health with cache status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded]
+                  cacheStatus:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  # ==================== RANDOM SERVICE ====================
+  /random/roulette:
+    get:
+      tags:
+        - Random
+      summary: Generate random roulette number
+      description: Get a random number between 0 and 36 from Random.org API or fallback (internal service only)
+      security:
+        - internalApiKey: []
+      responses:
+        '200':
+          description: Random number generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  number:
+                    type: integer
+                    minimum: 0
+                    maximum: 36
+                    example: 17
+                  timestamp:
+                    type: integer
+                  source:
+                    type: string
+                    enum: [random.org, fallback]
+                    example: random.org
+        '401':
+          description: Invalid internal API key
 
 components:
   securitySchemes:
@@ -509,3 +1231,9 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: JWT token obtenu via /auth/login ou /auth/register
+    internalApiKey:
+      type: apiKey
+      in: header
+      name: x-internal-api-key
+      description: Clé API pour les appels inter-services

@@ -251,7 +251,8 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=8008
-      - RANDOM_ORG_API_KEY=${RANDOM_ORG_API_KEY}
+      - RANDOM_ORG_API_KEY=${RANDOM_ORG_API_KEY}      
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}      
       - REDIS_URL=redis://redis:6379
     volumes:
       - ./services/random-org/src:/app/src:cached

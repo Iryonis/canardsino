@@ -249,7 +249,13 @@ export async function spin(req: Request, res: Response) {
 
     try {
       const randomOrgUrl = process.env.RANDOM_ORG_SERVICE || "http://random-org:8008";
-      const randomResponse = await fetch(`${randomOrgUrl}/roulette`);
+      const internalApiKey = process.env.INTERNAL_API_KEY || "internal_service_key";
+      
+      const randomResponse = await fetch(`${randomOrgUrl}/random/roulette`, {
+        headers: {
+          'x-internal-api-key': internalApiKey
+        }
+      });
       
       if (!randomResponse.ok) {
         throw new Error(`Random service error: ${randomResponse.status}`);
